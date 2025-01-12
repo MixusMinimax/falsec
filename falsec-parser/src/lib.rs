@@ -124,19 +124,10 @@ mod tests {
         let code = "123";
         let commands: Result<Vec<_>, _> = Parser::new(code, test_config()).collect();
         assert!(commands.is_ok());
-        assert_eq!(commands.unwrap(), [(Command::IntLiteral(123), Span {
-            start: Pos {
-                offset: 0,
-                line: 1,
-                column: 1
-            },
-            end: Pos {
-                offset: 3,
-                line: 1,
-                column: 4
-            },
-            source: "123"
-        })]);
+        assert_eq!(commands.unwrap(), [(
+            Command::IntLiteral(123),
+            Span::new(Pos::new(0, 1, 1), Pos::new(3, 1, 4), "123")
+        )]);
     }
 
     #[test]
@@ -145,45 +136,18 @@ mod tests {
         let commands: Result<Vec<_>, _> = Parser::new(code, test_config()).collect();
         assert!(commands.is_ok());
         assert_eq!(commands.unwrap(), [
-            (Command::IntLiteral(123), Span {
-                start: Pos {
-                    offset: 1,
-                    line: 1,
-                    column: 2
-                },
-                end: Pos {
-                    offset: 4,
-                    line: 1,
-                    column: 5
-                },
-                source: "123"
-            }),
-            (Command::IntLiteral(2), Span {
-                start: Pos {
-                    offset: 5,
-                    line: 1,
-                    column: 6
-                },
-                end: Pos {
-                    offset: 6,
-                    line: 1,
-                    column: 7
-                },
-                source: "2"
-            }),
-            (Command::IntLiteral(5), Span {
-                start: Pos {
-                    offset: 8,
-                    line: 1,
-                    column: 9
-                },
-                end: Pos {
-                    offset: 9,
-                    line: 1,
-                    column: 10
-                },
-                source: "5"
-            }),
+            (
+                Command::IntLiteral(123),
+                Span::new(Pos::new(1, 1, 2), Pos::new(4, 1, 5), "123")
+            ),
+            (
+                Command::IntLiteral(2),
+                Span::new(Pos::new(5, 1, 6), Pos::new(6, 1, 7), "2")
+            ),
+            (
+                Command::IntLiteral(5),
+                Span::new(Pos::new(8, 1, 9), Pos::new(9, 1, 10), "5")
+            ),
         ]);
     }
 
