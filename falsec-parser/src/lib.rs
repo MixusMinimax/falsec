@@ -84,7 +84,29 @@ impl<'source> Parser<'source> {
                         .map_err(|err| ParseError::parse_int_error(pos, err))?,
                 )
             }
-            'a' => Command::BitAnd,
+            '\'' => {
+                let pos2 = self.pos();
+                Command::CharLiteral(
+                    self.chars
+                        .next()
+                        .ok_or_else(|| ParseError::missing_token(pos2, 'c'))?,
+                )
+            }
+            '$' => Command::Dup,
+            '%' => Command::Drop,
+            '\\' => Command::Swap,
+            '@' => Command::Rot,
+            'ø' => Command::Pick,
+            '+' => Command::Plus,
+            '-' => Command::Minus,
+            '*' => Command::Mul,
+            '/' => Command::Div,
+            '_' => Command::Neg,
+            '&' => Command::BitAnd,
+            '|' => Command::BitOr,
+            '~' => Command::BitNot,
+            '>' => Command::Gt,
+            '=' => Command::Eq,
             c => return Err(ParseError::unexpected_token(pos, c)),
         };
         Ok((command, Span {
