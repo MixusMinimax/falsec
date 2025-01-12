@@ -1,0 +1,19 @@
+## File system
+.DS_Store
+desktop.ini
+
+## Editor
+.idea
+
+## Tool
+.cargo
+
+## Build
+/doc/
+/target
+
+## Temporary files
+*~
+\#*
+\#*\#
+.#*
