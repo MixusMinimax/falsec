@@ -158,7 +158,10 @@ mod tests {
 
     #[test]
     fn pos_advance() {
-        let config = Config { tab_width: 4 };
+        let config = Config {
+            tab_width: 4,
+            ..Default::default()
+        };
         let mut pos = Pos::new(0, 1, 1);
         pos.advance('\t', &config);
         assert_eq!(pos, Pos::new(1, 1, 5));

@@ -3,6 +3,7 @@ mod error;
 use crate::error::{ParseError, ParseErrorKind};
 use falsec_types::Config;
 use falsec_types::source::{Command, Pos, Span};
+use std::borrow::Cow;
 use std::iter::Peekable;
 use std::str::Chars;
 
@@ -38,13 +39,15 @@ impl<'source> Iterator for PosChars<'source> {
 pub struct Parser<'source> {
     source: &'source str,
     chars: PosChars<'source>,
+    config: Config,
 }
 
 impl<'source> Parser<'source> {
     pub fn new(source: &'source str, config: Config) -> Self {
         Self {
             source,
-            chars: PosChars::new(source, config),
+            chars: PosChars::new(source, config.clone()),
+            config,
         }
     }
 }
@@ -69,21 +72,6 @@ impl<'source> Parser<'source> {
             .next()
             .ok_or_else(|| ParseError::end_of_file(pos))?
         {
-            c if c.is_ascii_digit() => {
-                while self
-                    .chars
-                    .peek()
-                    .map(|c| c.is_ascii_digit())
-                    .unwrap_or_default()
-                {
-                    _ = self.chars.next();
-                }
-                Command::IntLiteral(
-                    self.source[pos.offset..self.pos().offset]
-                        .parse()
-                        .map_err(|err| ParseError::parse_int_error(pos, err))?,
-                )
-            }
             '\'' => {
                 let pos2 = self.pos();
                 Command::CharLiteral(
@@ -107,6 +95,115 @@ impl<'source> Parser<'source> {
             '~' => Command::BitNot,
             '>' => Command::Gt,
             '=' => Command::Eq,
+            '[' => {
+                let mut lambda = Vec::new();
+                loop {
+                    match self.chars.peek() {
+                        None => return Err(ParseError::missing_token(self.pos(), ']')),
+                        Some(']') => {
+                            self.chars.next();
+                            break;
+                        }
+                        Some(_) => {
+                            lambda.push(self.parse_command()?);
+                        }
+                    }
+                }
+                Command::Lambda(lambda)
+            }
+            '!' => Command::Exec,
+            '?' => Command::Conditional,
+            '#' => Command::While,
+            ':' => Command::Store,
+            ';' => Command::Load,
+            '^' => Command::ReadChar,
+            ',' => Command::WriteChar,
+            '"' => {
+                let start = self.pos();
+                let mut unescaped = String::new();
+                loop {
+                    let p = self.pos();
+                    match self
+                        .chars
+                        .next()
+                        .ok_or_else(|| ParseError::missing_token(p, '"'))?
+                    {
+                        '"' => {
+                            break Command::StringLiteral(if !unescaped.is_empty() {
+                                Cow::Owned(unescaped)
+                            } else {
+                                Cow::Borrowed(&self.source[start.offset..p.offset])
+                            });
+                        }
+                        '\\' => {
+                            if unescaped.is_empty() {
+                                unescaped.push_str(&self.source[start.offset..p.offset]);
+                            };
+                            let p2 = self.pos();
+                            unescaped.push(
+                                match self
+                                    .chars
+                                    .next()
+                                    .ok_or_else(|| ParseError::missing_token(p, 'c'))?
+                                {
+                                    lit @ ('"' | '\\') => lit,
+                                    'n' => '\n',
+                                    'r' => '\r',
+                                    't' => '\t',
+                                    '0' => '\0',
+                                    c => return Err(ParseError::unexpected_token(p2, c)),
+                                },
+                            );
+                        }
+                        c => {
+                            if !unescaped.is_empty() {
+                                unescaped.push(c)
+                            }
+                        }
+                    };
+                }
+            }
+            '.' => Command::WriteInt,
+            'ß' => Command::Flush,
+            '{' => {
+                let mut level = 1;
+                let start = self.pos();
+                loop {
+                    let p = self.pos();
+                    match self
+                        .chars
+                        .next()
+                        .ok_or_else(|| ParseError::missing_token(p, '}'))?
+                    {
+                        '{' if self.config.balance_comments => level += 1,
+                        '}' => {
+                            level -= 1;
+                            if level == 0 {
+                                break Command::Comment(Cow::Borrowed(
+                                    &self.source[start.offset..p.offset],
+                                ));
+                            }
+                        }
+                        _ => (),
+                    };
+                }
+            }
+            c if c.is_ascii_lowercase() => Command::Var(c),
+            c if c.is_ascii_digit() => {
+                while self
+                    .chars
+                    .peek()
+                    .map(|c| c.is_ascii_digit())
+                    .unwrap_or_default()
+                {
+                    self.chars.next();
+                }
+                Command::IntLiteral(
+                    self.source[pos.offset..self.pos().offset]
+                        .parse()
+                        .map_err(|err| ParseError::parse_int_error(pos, err))?,
+                )
+            }
             c => return Err(ParseError::unexpected_token(pos, c)),
         };
         Ok((command, Span {
@@ -136,9 +233,13 @@ mod tests {
     use crate::Parser;
     use falsec_types::Config;
     use falsec_types::source::{Command, Pos, Span};
+    use std::borrow::Cow;
 
     fn test_config() -> Config {
-        Config { tab_width: 4 }
+        Config {
+            tab_width: 4,
+            ..Default::default()
+        }
     }
 
     #[test]
@@ -192,5 +293,78 @@ mod tests {
                 Span::new(Pos::new(9, 3, 6), Pos::new(10, 3, 7), "6")
             ),
         ])
+    }
+
+    #[test]
+    fn string_escape_sequences() {
+        let code = r###"0_"asd\n\r\t asd \\\"asd"#"###;
+        let commands: Result<Vec<_>, _> = Parser::new(code, Config {
+            tab_width: 2,
+            balance_comments: false,
+            string_escape_sequences: true,
+        })
+        .collect();
+        let commands: Vec<_> = commands.unwrap().into_iter().map(|(com, _)| com).collect();
+        assert!(matches!(
+            commands[..],
+            [
+                Command::IntLiteral(0),
+                Command::Neg,
+                Command::StringLiteral(Cow::Owned(ref str)),
+                Command::While
+            ] if str == "asd\n\r\t asd \\\"asd"
+        ));
+    }
+
+    #[test]
+    fn complex() {
+        let code = r###"
+            { read until you see \n, and convert decimal to number: }
+            [ß0[^$$10=\13=|~][$$'01->\'9>~&['0-\10*+$]?%]#%ß]n:
+            "A: "n;!$$a:."
+            B: "n;!$$b:.+"
+            "a;." + "b;." = "."
+            "
+        "###;
+        let commands: Result<Vec<_>, _> = Parser::new(code, Config {
+            tab_width: 2,
+            balance_comments: false,
+            string_escape_sequences: false,
+        })
+        .collect();
+        assert!(commands.is_ok());
+        let without_spans: Vec<_> = commands.unwrap().into_iter().map(|(com, _)| com).collect();
+        // assert_matches is experimental and requires nightly
+        assert!(matches!(without_spans[..], [
+            Command::Comment(Cow::Borrowed(
+                " read until you see \\n, and convert decimal to number: ",
+            )),
+            Command::Lambda(..),
+            Command::Var('n'),
+            Command::Store,
+            Command::StringLiteral(Cow::Borrowed("A: ")),
+            Command::Var('n'),
+            Command::Load,
+            Command::Exec,
+            Command::Dup,
+            Command::Dup,
+            Command::Var('a'),
+            Command::Store,
+            Command::WriteInt,
+            ..
+        ]));
+        let Command::Lambda(ref l1) = without_spans[1] else {
+            panic!()
+        };
+        let l1: Vec<_> = l1.iter().map(|(com, _)| com).collect();
+        assert!(matches!(l1[..], [
+            Command::Flush,
+            Command::IntLiteral(0),
+            Command::Lambda(..),
+            Command::Lambda(..),
+            Command::While,
+            Command::Drop,
+            Command::Flush
+        ]));
     }
 }
