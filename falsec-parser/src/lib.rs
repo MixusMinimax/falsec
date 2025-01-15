@@ -1,8 +1,8 @@
 mod error;
 
 use crate::error::{ParseError, ParseErrorKind};
+use falsec_types::source::{Command, LambdaCommand, Pos, Span};
 use falsec_types::Config;
-use falsec_types::source::{Command, Pos, Span};
 use std::borrow::Cow;
 use std::iter::Peekable;
 use std::str::Chars;
@@ -27,7 +27,7 @@ impl<'source> PosChars<'source> {
     }
 }
 
-impl<'source> Iterator for PosChars<'source> {
+impl Iterator for PosChars<'_> {
     type Item = char;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -109,7 +109,7 @@ impl<'source> Parser<'source> {
                         }
                     }
                 }
-                Command::Lambda(lambda)
+                Command::Lambda(LambdaCommand::LambdaDefinition(lambda))
             }
             '!' => Command::Exec,
             '?' => Command::Conditional,
@@ -206,11 +206,14 @@ impl<'source> Parser<'source> {
             }
             c => return Err(ParseError::unexpected_token(pos, c)),
         };
-        Ok((command, Span {
-            start: pos,
-            end: self.pos(),
-            source: &self.source[pos.offset..self.pos().offset],
-        }))
+        Ok((
+            command,
+            Span {
+                start: pos,
+                end: self.pos(),
+                source: &self.source[pos.offset..self.pos().offset],
+            },
+        ))
     }
 }
 
@@ -231,8 +234,8 @@ impl<'source> Iterator for Parser<'source> {
 #[cfg(test)]
 mod tests {
     use crate::Parser;
+    use falsec_types::source::{Command, LambdaCommand, Pos, Span};
     use falsec_types::Config;
-    use falsec_types::source::{Command, Pos, Span};
     use std::borrow::Cow;
 
     fn test_config() -> Config {
@@ -247,10 +250,13 @@ mod tests {
         let code = "123";
         let commands: Result<Vec<_>, _> = Parser::new(code, test_config()).collect();
         assert!(commands.is_ok());
-        assert_eq!(commands.unwrap(), [(
-            Command::IntLiteral(123),
-            Span::new(Pos::new(0, 1, 1), Pos::new(3, 1, 4), "123")
-        )]);
+        assert_eq!(
+            commands.unwrap(),
+            [(
+                Command::IntLiteral(123),
+                Span::new(Pos::new(0, 1, 1), Pos::new(3, 1, 4), "123")
+            )]
+        );
     }
 
     #[test]
@@ -258,20 +264,23 @@ mod tests {
         let code = " 123 2  5  ";
         let commands: Result<Vec<_>, _> = Parser::new(code, test_config()).collect();
         assert!(commands.is_ok());
-        assert_eq!(commands.unwrap(), [
-            (
-                Command::IntLiteral(123),
-                Span::new(Pos::new(1, 1, 2), Pos::new(4, 1, 5), "123")
-            ),
-            (
-                Command::IntLiteral(2),
-                Span::new(Pos::new(5, 1, 6), Pos::new(6, 1, 7), "2")
-            ),
-            (
-                Command::IntLiteral(5),
-                Span::new(Pos::new(8, 1, 9), Pos::new(9, 1, 10), "5")
-            ),
-        ]);
+        assert_eq!(
+            commands.unwrap(),
+            [
+                (
+                    Command::IntLiteral(123),
+                    Span::new(Pos::new(1, 1, 2), Pos::new(4, 1, 5), "123")
+                ),
+                (
+                    Command::IntLiteral(2),
+                    Span::new(Pos::new(5, 1, 6), Pos::new(6, 1, 7), "2")
+                ),
+                (
+                    Command::IntLiteral(5),
+                    Span::new(Pos::new(8, 1, 9), Pos::new(9, 1, 10), "5")
+                ),
+            ]
+        );
     }
 
     #[test]
@@ -279,30 +288,36 @@ mod tests {
         let code = "\t123\n3\n\t 6\n";
         let commands: Result<Vec<_>, _> = Parser::new(code, test_config()).collect();
         assert!(commands.is_ok());
-        assert_eq!(commands.unwrap(), [
-            (
-                Command::IntLiteral(123),
-                Span::new(Pos::new(1, 1, 5), Pos::new(4, 1, 8), "123")
-            ),
-            (
-                Command::IntLiteral(3),
-                Span::new(Pos::new(5, 2, 1), Pos::new(6, 2, 2), "3")
-            ),
-            (
-                Command::IntLiteral(6),
-                Span::new(Pos::new(9, 3, 6), Pos::new(10, 3, 7), "6")
-            ),
-        ])
+        assert_eq!(
+            commands.unwrap(),
+            [
+                (
+                    Command::IntLiteral(123),
+                    Span::new(Pos::new(1, 1, 5), Pos::new(4, 1, 8), "123")
+                ),
+                (
+                    Command::IntLiteral(3),
+                    Span::new(Pos::new(5, 2, 1), Pos::new(6, 2, 2), "3")
+                ),
+                (
+                    Command::IntLiteral(6),
+                    Span::new(Pos::new(9, 3, 6), Pos::new(10, 3, 7), "6")
+                ),
+            ]
+        )
     }
 
     #[test]
     fn string_escape_sequences() {
         let code = r###"0_"asd\n\r\t asd \\\"asd"#"###;
-        let commands: Result<Vec<_>, _> = Parser::new(code, Config {
-            tab_width: 2,
-            balance_comments: false,
-            string_escape_sequences: true,
-        })
+        let commands: Result<Vec<_>, _> = Parser::new(
+            code,
+            Config {
+                tab_width: 2,
+                balance_comments: false,
+                string_escape_sequences: true,
+            },
+        )
         .collect();
         let commands: Vec<_> = commands.unwrap().into_iter().map(|(com, _)| com).collect();
         assert!(matches!(
@@ -326,45 +341,54 @@ mod tests {
             "a;." + "b;." = "."
             "
         "###;
-        let commands: Result<Vec<_>, _> = Parser::new(code, Config {
-            tab_width: 2,
-            balance_comments: false,
-            string_escape_sequences: false,
-        })
+        let commands: Result<Vec<_>, _> = Parser::new(
+            code,
+            Config {
+                tab_width: 2,
+                balance_comments: false,
+                string_escape_sequences: false,
+            },
+        )
         .collect();
         assert!(commands.is_ok());
         let without_spans: Vec<_> = commands.unwrap().into_iter().map(|(com, _)| com).collect();
         // assert_matches is experimental and requires nightly
-        assert!(matches!(without_spans[..], [
-            Command::Comment(Cow::Borrowed(
-                " read until you see \\n, and convert decimal to number: ",
-            )),
-            Command::Lambda(..),
-            Command::Var('n'),
-            Command::Store,
-            Command::StringLiteral(Cow::Borrowed("A: ")),
-            Command::Var('n'),
-            Command::Load,
-            Command::Exec,
-            Command::Dup,
-            Command::Dup,
-            Command::Var('a'),
-            Command::Store,
-            Command::WriteInt,
-            ..
-        ]));
-        let Command::Lambda(ref l1) = without_spans[1] else {
+        assert!(matches!(
+            without_spans[..],
+            [
+                Command::Comment(Cow::Borrowed(
+                    " read until you see \\n, and convert decimal to number: ",
+                )),
+                Command::Lambda(..),
+                Command::Var('n'),
+                Command::Store,
+                Command::StringLiteral(Cow::Borrowed("A: ")),
+                Command::Var('n'),
+                Command::Load,
+                Command::Exec,
+                Command::Dup,
+                Command::Dup,
+                Command::Var('a'),
+                Command::Store,
+                Command::WriteInt,
+                ..
+            ]
+        ));
+        let Command::Lambda(LambdaCommand::LambdaDefinition(ref l1)) = without_spans[1] else {
             panic!()
         };
         let l1: Vec<_> = l1.iter().map(|(com, _)| com).collect();
-        assert!(matches!(l1[..], [
-            Command::Flush,
-            Command::IntLiteral(0),
-            Command::Lambda(..),
-            Command::Lambda(..),
-            Command::While,
-            Command::Drop,
-            Command::Flush
-        ]));
+        assert!(matches!(
+            l1[..],
+            [
+                Command::Flush,
+                Command::IntLiteral(0),
+                Command::Lambda(..),
+                Command::Lambda(..),
+                Command::While,
+                Command::Drop,
+                Command::Flush
+            ]
+        ));
     }
 }

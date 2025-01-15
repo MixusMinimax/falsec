@@ -1,5 +1,6 @@
 use crate::Config;
 use std::borrow::Cow;
+use std::collections::HashMap;
 use std::fmt;
 
 /// A position in a source file.
@@ -79,6 +80,14 @@ impl<'source> Span<'source> {
     }
 }
 
+pub type Lambda<'source> = Vec<(Command<'source>, Span<'source>)>;
+pub struct Program<'source> {
+    /// id of the top-level lambda. usually 0.
+    pub main_id: u64,
+    /// all lambdas defined in the program
+    pub lambdas: HashMap<u64, Lambda<'source>>,
+}
+
 #[derive(Clone, Eq, PartialEq, Debug)]
 pub enum Command<'source> {
     /// **123** put integer 123 on the stack
@@ -120,7 +129,7 @@ pub enum Command<'source> {
     Eq,
 
     /// **\[...]** define and put a lambda on the stack
-    Lambda(Vec<(Command<'source>, Span<'source>)>),
+    Lambda(LambdaCommand<'source>),
     /// **!** execute a lambda
     Exec,
     /// **?** conditional execution: condition\[true]?
@@ -149,6 +158,12 @@ pub enum Command<'source> {
 
     /// **{...}** comment.
     Comment(Cow<'source, str>),
+}
+
+#[derive(Clone, Eq, PartialEq, Debug)]
+pub enum LambdaCommand<'source> {
+    LambdaDefinition(Lambda<'source>),
+    LambdaReference(u64),
 }
 
 #[cfg(test)]
