@@ -11,7 +11,7 @@ if __name__ == '__main__':
     schema_path = Path(repo) / 'config_schema.json'
 
     subprocess.run([
-        'cargo', 'run', '--release', '--features=schema', '--package', 'falsec-types', '--bin',
+        'cargo', 'run', '-q', '--release', '--features=schema', '--package', 'falsec-types', '--bin',
         'generate-json-schema', '--',
-        '--output', str(schema_path.resolve())
+        '-v', '--output', str(schema_path.resolve())
     ], check=True)

@@ -3,14 +3,10 @@ name = "falsec-types"
 version = "0.1.0"
 edition = "2021"
 
-[lib]
-path = "src/lib.rs"
-
 [[bin]]
 name = "generate-json-schema"
 path = "src/bin/generate_json_schema.rs"
 required-features = ["schema"]
-
 
 [dependencies.schemars]
 version = "0.8"
