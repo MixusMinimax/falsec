@@ -1,0 +1,1 @@
+{"$schema":"http://json-schema.org/draft-07/schema#","title":"Config","type":"object","required":["balance_comments","string_escape_sequences","tab_width"],"properties":{"balance_comments":{"type":"boolean"},"string_escape_sequences":{"type":"boolean"},"tab_width":{"type":"integer","format":"uint","minimum":0.0}}}
