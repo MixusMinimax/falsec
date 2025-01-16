@@ -174,7 +174,7 @@ mod tests {
     #[test]
     fn pos_advance() {
         let config = Config {
-            tab_width: 4,
+            tab_width: 4.into(),
             ..Default::default()
         };
         let mut pos = Pos::new(0, 1, 1);

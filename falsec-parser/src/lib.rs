@@ -240,7 +240,7 @@ mod tests {
 
     fn test_config() -> Config {
         Config {
-            tab_width: 4,
+            tab_width: 4.into(),
             ..Default::default()
         }
     }
@@ -313,9 +313,10 @@ mod tests {
         let commands: Result<Vec<_>, _> = Parser::new(
             code,
             Config {
-                tab_width: 2,
+                tab_width: 2.into(),
                 balance_comments: false,
                 string_escape_sequences: true,
+                ..Default::default()
             },
         )
         .collect();
@@ -344,9 +345,10 @@ mod tests {
         let commands: Result<Vec<_>, _> = Parser::new(
             code,
             Config {
-                tab_width: 2,
+                tab_width: 2.into(),
                 balance_comments: false,
                 string_escape_sequences: false,
+                ..Default::default()
             },
         )
         .collect();
