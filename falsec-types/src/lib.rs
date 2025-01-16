@@ -18,7 +18,7 @@ pub struct Config {
     pub type_safety: TypeSafety,
 }
 
-#[derive(Clone, PartialEq, Eq, Debug, Default)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub enum TypeSafety {
@@ -27,7 +27,7 @@ pub enum TypeSafety {
     None,
     /// When trying to execute a lambda, make sure that the popped value is a lambda.
     Lambda,
-    /// Include all checks from [TypeSafety::Lambda], and make sure than when storing or loading
+    /// Include all checks from [TypeSafety::Lambda], and make sure that when storing or loading
     /// a variable, the popped value is a variable name.
     LambdaAndVar,
     /// Include all checks from [TypeSafety::LambdaAndVar], and ensure that only integers can be

@@ -17,6 +17,11 @@ pub enum InterpreterErrorKind {
     LambdaDefinitionNotAllowed,
     TriedToPopFromEmptyCallStack,
     TriedToPopFromEmptyDataStack,
+    TypeCastError {
+        from: &'static str,
+        to: &'static str,
+    },
+    IndexOutOfBounds(i64, usize),
 }
 
 impl Error for InterpreterError {}
@@ -36,6 +41,10 @@ impl fmt::Display for InterpreterErrorKind {
             LambdaDefinitionNotAllowed => write!(f, "Lambda definition not allowed"),
             TriedToPopFromEmptyCallStack => write!(f, "Tried to pop from empty call stack"),
             TriedToPopFromEmptyDataStack => write!(f, "Tried to pop from empty data stack"),
+            TypeCastError { from, to } => write!(f, "Type cast error: {} -> {}", from, to),
+            IndexOutOfBounds(index, len) => {
+                write!(f, "Index out of bounds: {} must be in 0..{}", index, len)
+            }
         }
     }
 }
@@ -91,6 +100,36 @@ impl InterpreterError {
             current_lambda_id,
             program_counter,
             kind: InterpreterErrorKind::TriedToPopFromEmptyDataStack,
+        }
+    }
+
+    pub fn type_cast_error(
+        from: &'static str,
+        to: &'static str,
+        pos: Pos,
+        current_lambda_id: u64,
+        program_counter: usize,
+    ) -> Self {
+        Self {
+            pos,
+            current_lambda_id,
+            program_counter,
+            kind: InterpreterErrorKind::TypeCastError { from, to },
+        }
+    }
+
+    pub fn index_out_of_bounds(
+        index: i64,
+        len: usize,
+        pos: Pos,
+        current_lambda_id: u64,
+        program_counter: usize,
+    ) -> Self {
+        Self {
+            pos,
+            current_lambda_id,
+            program_counter,
+            kind: InterpreterErrorKind::IndexOutOfBounds(index, len),
         }
     }
 }

@@ -151,6 +151,7 @@ impl<'source> Parser<'source> {
                                     'r' => '\r',
                                     't' => '\t',
                                     '0' => '\0',
+                                    '\n' => continue, // ignore newline
                                     c => return Err(ParseError::unexpected_token(p2, c)),
                                 },
                             );
@@ -313,8 +314,6 @@ mod tests {
         let commands: Result<Vec<_>, _> = Parser::new(
             code,
             Config {
-                tab_width: 2.into(),
-                balance_comments: false,
                 string_escape_sequences: true,
                 ..Default::default()
             },
@@ -329,6 +328,24 @@ mod tests {
                 Command::StringLiteral(Cow::Owned(ref str)),
                 Command::While
             ] if str == "asd\n\r\t asd \\\"asd"
+        ));
+    }
+
+    #[test]
+    fn string_escaped_newline() {
+        let code = "\"a\\nsd\\\nqwe\"";
+        let commands: Result<Vec<_>, _> = Parser::new(
+            code,
+            Config {
+                string_escape_sequences: true,
+                ..Default::default()
+            },
+        )
+        .collect();
+        let commands: Vec<_> = commands.unwrap().into_iter().map(|(com, _)| com).collect();
+        assert!(matches!(
+            commands[..],
+            [Command::StringLiteral(Cow::Owned(ref str))] if str == "a\nsdqwe"
         ));
     }
 
