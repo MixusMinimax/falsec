@@ -774,4 +774,136 @@ mod tests {
         interpreter.run().unwrap();
         assert_eq!(output, b"Hi");
     }
+
+    /// ```false
+    /// { read until you see \n, and convert decimal to number: }
+    /// [ß0[^$$10=\13=|~][$$'01->\'9>~&['0-\10*+$]?%]#%ß]n:
+    /// "A: "n;!$$a:."
+    /// B: "n;!$$b:.+"
+    /// "a;." + "b;." = "."
+    /// "
+    /// ```
+    #[test]
+    fn add() {
+        let program = Program {
+            main_id: 0,
+            lambdas: HashMap::from([
+                (
+                    0,
+                    simple_lambda![
+                        Command::Comment(Cow::Borrowed(
+                            " read until you see \\n, and convert decimal to number: "
+                        )),
+                        Command::Lambda(LambdaReference(1)),
+                        Command::Var('n'),
+                        Command::Store,
+                        Command::StringLiteral(Cow::Borrowed("A: ")),
+                        Command::Var('n'),
+                        Command::Load,
+                        Command::Exec,
+                        Command::Dup,
+                        Command::Dup,
+                        Command::Var('a'),
+                        Command::Store,
+                        Command::WriteInt,
+                        Command::StringLiteral(Cow::Borrowed("\nB: ")),
+                        Command::Var('n'),
+                        Command::Load,
+                        Command::Exec,
+                        Command::Dup,
+                        Command::Dup,
+                        Command::Var('b'),
+                        Command::Store,
+                        Command::WriteInt,
+                        Command::Plus,
+                        Command::StringLiteral(Cow::Borrowed("\n")),
+                        Command::Var('a'),
+                        Command::Load,
+                        Command::WriteInt,
+                        Command::StringLiteral(Cow::Borrowed(" + ")),
+                        Command::Var('b'),
+                        Command::Load,
+                        Command::WriteInt,
+                        Command::StringLiteral(Cow::Borrowed(" = ")),
+                        Command::WriteInt,
+                        Command::StringLiteral(Cow::Borrowed("\n")),
+                    ],
+                ),
+                // ß0[^$$10=\13=|~][$$'01->\'9>~&['0-\10*+$]?%]#%ß
+                (
+                    1,
+                    simple_lambda![
+                        Command::Flush,
+                        Command::IntLiteral(0),
+                        Command::Lambda(LambdaReference(2)),
+                        Command::Lambda(LambdaReference(3)),
+                        Command::While,
+                        Command::Drop,
+                        Command::Flush,
+                    ],
+                ),
+                // ^$$10=\13=|~
+                (
+                    2,
+                    simple_lambda![
+                        Command::ReadChar,
+                        Command::Dup,
+                        Command::Dup,
+                        Command::IntLiteral(10), // \n
+                        Command::Eq,
+                        Command::Swap,
+                        Command::IntLiteral(13), // \r
+                        Command::Eq,
+                        Command::BitOr,
+                        Command::BitNot,
+                    ],
+                ),
+                // $$'01->\'9>~&['0-\10*+$]?%
+                (
+                    3,
+                    simple_lambda![
+                        Command::Dup,
+                        Command::Dup,
+                        Command::CharLiteral('0'),
+                        Command::IntLiteral(1),
+                        Command::Minus,
+                        Command::Gt,
+                        Command::Swap,
+                        Command::CharLiteral('9'),
+                        Command::Gt,
+                        Command::BitNot,
+                        Command::BitAnd,
+                        Command::Lambda(LambdaReference(4)),
+                        Command::Conditional,
+                        Command::Drop,
+                    ],
+                ),
+                // '0-\10*+$
+                (
+                    4,
+                    simple_lambda![
+                        Command::CharLiteral('0'),
+                        Command::Minus,
+                        Command::Swap,
+                        Command::IntLiteral(10),
+                        Command::Mul,
+                        Command::Plus,
+                        Command::Dup,
+                    ],
+                ),
+            ]),
+        };
+        let stack = Rc::<RefCell<_>>::default();
+        let input = b"123\n321\n";
+        let mut output = Vec::new();
+        let interpreter = Interpreter {
+            input: input.as_ref(),
+            output: &mut output,
+            program,
+            config: Default::default(),
+            stack,
+        };
+        interpreter.run().unwrap();
+        assert_eq!(output, b"A: 123\nB: 321\n123 + 321 = 444\n");
+    }
 }
