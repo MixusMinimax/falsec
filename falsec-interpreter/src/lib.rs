@@ -358,8 +358,8 @@ impl<Input: Read, Output: Write> Interpreter<'_, Input, Output> {
                     state.call_lambda(id)?;
                 }
                 Command::Conditional => {
-                    let condition = state.pop()?.into_integer(&self.config, &state)?;
                     let lambda_id = state.pop()?.into_lambda(&self.config, &state)?;
+                    let condition = state.pop()?.into_integer(&self.config, &state)?;
                     if condition != 0 {
                         state.call_lambda(lambda_id)?;
                     }
@@ -426,7 +426,8 @@ impl<Input: Read, Output: Write> Interpreter<'_, Input, Output> {
 #[cfg(test)]
 mod tests {
     use crate::{Interpreter, StackValue};
-    use falsec_types::source::{Command, Pos, Program, Span};
+    use falsec_types::source::LambdaCommand::LambdaReference;
+    use falsec_types::source::{Command, LambdaCommand, Pos, Program, Span};
     use std::cell::RefCell;
     use std::collections::HashMap;
     use std::ops::Deref;
@@ -441,6 +442,36 @@ mod tests {
             stack,
         };
         interpreter.run().unwrap();
+    }
+
+    /// ```
+    /// use falsec_interpreter::simple_lambda;
+    ///
+    /// simple_lambda![];
+    /// ```
+    #[macro_export]
+    macro_rules! simple_lambda {
+        ($($command:expr),* $(,)?) => {
+            vec![$(($command, Span::new(Pos::at_start(), Pos::at_start(), ""))),*]
+        };
+    }
+
+    /// ```
+    /// use falsec_interpreter::simple_program;
+    ///
+    /// simple_program![];
+    /// ```
+    #[macro_export]
+    macro_rules! simple_program {
+        ($($command:expr),* $(,)?) => {
+            Program {
+                main_id: 0,
+                lambdas: HashMap::from([(
+                    0,
+                    simple_lambda!($($command),*),
+                )]),
+            }
+        };
     }
 
     #[test]
@@ -473,5 +504,138 @@ mod tests {
         let stack = Rc::<RefCell<_>>::default();
         run_simple(program, stack.clone());
         assert_eq!(stack.borrow().deref(), &[StackValue::Integer(123)]);
+    }
+
+    #[test]
+    fn simple_program() {
+        let program = simple_program![
+            Command::IntLiteral(123),
+            Command::IntLiteral(321),
+            Command::Plus,
+        ];
+        let stack = Rc::<RefCell<_>>::default();
+        run_simple(program, stack.clone());
+        assert_eq!(stack.borrow().deref(), &[StackValue::Integer(444)]);
+    }
+
+    #[test]
+    fn store_load() {
+        let program = simple_program![
+            Command::IntLiteral(123),
+            Command::Var('a'),
+            Command::Store,
+            Command::Var('a'),
+            Command::Load,
+        ];
+        let stack = Rc::<RefCell<_>>::default();
+        run_simple(program, stack.clone());
+        assert_eq!(stack.borrow().deref(), &[StackValue::Integer(123)]);
+    }
+
+    #[test]
+    fn basic_lambda() {
+        let program = Program {
+            main_id: 0,
+            lambdas: HashMap::from([
+                (
+                    0,
+                    simple_lambda![
+                        Command::IntLiteral(123),
+                        Command::Lambda(LambdaCommand::LambdaReference(1)),
+                        Command::Exec,
+                    ],
+                ),
+                (1, simple_lambda![Command::IntLiteral(321), Command::Plus]),
+            ]),
+        };
+        let stack = Rc::<RefCell<_>>::default();
+        run_simple(program, stack.clone());
+        assert_eq!(stack.borrow().deref(), &[StackValue::Integer(444)]);
+    }
+
+    #[test]
+    fn conditional() {
+        let program = Program {
+            main_id: 0,
+            lambdas: HashMap::from([
+                (
+                    0,
+                    simple_lambda![
+                        Command::Lambda(LambdaCommand::LambdaReference(1)),
+                        Command::Conditional
+                    ],
+                ),
+                (1, simple_lambda![Command::IntLiteral(123)]),
+            ]),
+        };
+        let stack_false = Rc::new(RefCell::new(vec![StackValue::Integer(0)]));
+        run_simple(program.clone(), stack_false.clone());
+        assert_eq!(stack_false.borrow().deref(), &[]);
+        let stack_true = Rc::new(RefCell::new(vec![StackValue::Integer(-1)]));
+        run_simple(program, stack_true.clone());
+        assert_eq!(stack_true.borrow().deref(), &[StackValue::Integer(123)]);
+    }
+
+    #[test]
+    fn factorial() {
+        // iterate from stack[0] to 1, multiplying the result into `a`. `a` is initialized to 1.
+        let program = Program {
+            main_id: 0,
+            lambdas: HashMap::from([
+                // 1a:[$0>][$a;*a:1-]#%a;.
+                (
+                    0,
+                    simple_lambda![
+                        Command::IntLiteral(1),
+                        Command::Var('a'),
+                        Command::Store,
+                        Command::Lambda(LambdaReference(1)),
+                        Command::Lambda(LambdaReference(2)),
+                        Command::While,
+                        Command::Drop,
+                        Command::Var('a'),
+                        Command::Load,
+                    ],
+                ),
+                // $0>
+                (
+                    1,
+                    simple_lambda![Command::Dup, Command::IntLiteral(0), Command::Gt,],
+                ),
+                // $a;*a:1-
+                (
+                    2,
+                    simple_lambda![
+                        Command::Dup,
+                        Command::Var('a'),
+                        Command::Load,
+                        Command::Mul,
+                        Command::Var('a'),
+                        Command::Store,
+                        Command::IntLiteral(1),
+                        Command::Minus
+                    ],
+                ),
+            ]),
+        };
+        let stack0 = Rc::new(RefCell::new(vec![StackValue::Integer(0)]));
+        let stack1 = Rc::new(RefCell::new(vec![StackValue::Integer(1)]));
+        let stack2 = Rc::new(RefCell::new(vec![StackValue::Integer(2)]));
+        let stack3 = Rc::new(RefCell::new(vec![StackValue::Integer(3)]));
+        let stack4 = Rc::new(RefCell::new(vec![StackValue::Integer(4)]));
+        let stack5 = Rc::new(RefCell::new(vec![StackValue::Integer(5)]));
+        run_simple(program.clone(), stack0.clone());
+        run_simple(program.clone(), stack1.clone());
+        run_simple(program.clone(), stack2.clone());
+        run_simple(program.clone(), stack3.clone());
+        run_simple(program.clone(), stack4.clone());
+        run_simple(program, stack5.clone());
+
+        assert_eq!(stack0.borrow().deref(), &[StackValue::Integer(1)]);
+        assert_eq!(stack1.borrow().deref(), &[StackValue::Integer(1)]);
+        assert_eq!(stack2.borrow().deref(), &[StackValue::Integer(2)]);
+        assert_eq!(stack3.borrow().deref(), &[StackValue::Integer(6)]);
+        assert_eq!(stack4.borrow().deref(), &[StackValue::Integer(24)]);
+        assert_eq!(stack5.borrow().deref(), &[StackValue::Integer(120)]);
     }
 }

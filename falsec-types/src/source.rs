@@ -81,6 +81,7 @@ impl<'source> Span<'source> {
 }
 
 pub type Lambda<'source> = Vec<(Command<'source>, Span<'source>)>;
+#[derive(Clone, Debug, Default)]
 pub struct Program<'source> {
     /// id of the top-level lambda. usually 0.
     pub main_id: u64,
