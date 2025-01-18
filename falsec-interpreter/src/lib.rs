@@ -52,7 +52,7 @@ enum StackValue {
 }
 
 impl<Input: Read, Output: Write> Interpreter<'_, Input, Output> {
-    pub fn run(self) -> Result<(), InterpreterError> {
+    pub fn run(mut self) -> Result<(), InterpreterError> {
         struct State<'source> {
             program: &'source Program<'source>,
             call_stack: Vec<StackFrame>,
@@ -403,11 +403,60 @@ impl<Input: Read, Output: Write> Interpreter<'_, Input, Output> {
                         .unwrap_or(StackValue::Integer(0));
                     state.push(value);
                 }
-                Command::ReadChar => {}
-                Command::WriteChar => {}
-                Command::StringLiteral(_) => {}
-                Command::WriteInt => {}
-                Command::Flush => {}
+                Command::ReadChar => {
+                    let mut buf = [0];
+                    self.input.read_exact(&mut buf).map_err(|e| {
+                        InterpreterError::io_error(
+                            e,
+                            state.current_pos,
+                            state.current_lambda_id,
+                            state.program_counter,
+                        )
+                    })?;
+                    state.pushi(buf[0] as i64);
+                }
+                Command::WriteChar => {
+                    let c = state.pop()?.into_integer(&self.config, &state)?;
+                    self.output.write_all(&[c as u8]).map_err(|e| {
+                        InterpreterError::io_error(
+                            e,
+                            state.current_pos,
+                            state.current_lambda_id,
+                            state.program_counter,
+                        )
+                    })?;
+                }
+                Command::StringLiteral(s) => {
+                    self.output.write_all(s.as_bytes()).map_err(|e| {
+                        InterpreterError::io_error(
+                            e,
+                            state.current_pos,
+                            state.current_lambda_id,
+                            state.program_counter,
+                        )
+                    })?;
+                }
+                Command::WriteInt => {
+                    let i = state.pop()?.into_integer(&self.config, &state)?;
+                    write!(self.output, "{}", i).map_err(|e| {
+                        InterpreterError::io_error(
+                            e,
+                            state.current_pos,
+                            state.current_lambda_id,
+                            state.program_counter,
+                        )
+                    })?;
+                }
+                Command::Flush => {
+                    self.output.flush().map_err(|e| {
+                        InterpreterError::io_error(
+                            e,
+                            state.current_pos,
+                            state.current_lambda_id,
+                            state.program_counter,
+                        )
+                    })?;
+                }
                 Command::Comment(_) => {}
             }
         }
@@ -428,6 +477,7 @@ mod tests {
     use crate::{Interpreter, StackValue};
     use falsec_types::source::LambdaCommand::LambdaReference;
     use falsec_types::source::{Command, LambdaCommand, Pos, Program, Span};
+    use std::borrow::Cow;
     use std::cell::RefCell;
     use std::collections::HashMap;
     use std::ops::Deref;
@@ -637,5 +687,91 @@ mod tests {
         assert_eq!(stack3.borrow().deref(), &[StackValue::Integer(6)]);
         assert_eq!(stack4.borrow().deref(), &[StackValue::Integer(24)]);
         assert_eq!(stack5.borrow().deref(), &[StackValue::Integer(120)]);
+    }
+
+    #[test]
+    fn output_char() {
+        let program = simple_program![
+            Command::IntLiteral('H' as u64),
+            Command::WriteChar,
+            Command::IntLiteral('i' as u64),
+            Command::WriteChar,
+            Command::Flush,
+        ];
+        let stack = Rc::<RefCell<_>>::default();
+        let mut output = Vec::new();
+        let interpreter = Interpreter {
+            input: &[] as &[u8],
+            output: &mut output,
+            program,
+            config: Default::default(),
+            stack,
+        };
+        interpreter.run().unwrap();
+        assert_eq!(output, b"Hi");
+    }
+
+    #[test]
+    fn output_string() {
+        let program = simple_program![
+            Command::StringLiteral(Cow::Borrowed("Hello, World!")),
+            Command::Flush,
+        ];
+        let stack = Rc::<RefCell<_>>::default();
+        let mut output = Vec::new();
+        let interpreter = Interpreter {
+            input: &[] as &[u8],
+            output: &mut output,
+            program,
+            config: Default::default(),
+            stack,
+        };
+        interpreter.run().unwrap();
+        assert_eq!(output, b"Hello, World!");
+    }
+
+    #[test]
+    fn output_number() {
+        let program = simple_program![
+            Command::IntLiteral(123),
+            Command::WriteInt,
+            Command::IntLiteral(456),
+            Command::WriteInt,
+            Command::Flush,
+        ];
+        let stack = Rc::<RefCell<_>>::default();
+        let mut output = Vec::new();
+        let interpreter = Interpreter {
+            input: &[] as &[u8],
+            output: &mut output,
+            program,
+            config: Default::default(),
+            stack,
+        };
+        interpreter.run().unwrap();
+        assert_eq!(output, b"123456");
+    }
+
+    #[test]
+    fn input_char() {
+        let program = simple_program![
+            Command::ReadChar,
+            Command::WriteChar,
+            Command::ReadChar,
+            Command::WriteChar,
+            Command::Flush,
+        ];
+        let stack = Rc::<RefCell<_>>::default();
+        let input = b"Hi";
+        let mut output = Vec::new();
+        let interpreter = Interpreter {
+            input: input.as_ref(),
+            output: &mut output,
+            program,
+            config: Default::default(),
+            stack,
+        };
+        interpreter.run().unwrap();
+        assert_eq!(output, b"Hi");
     }
 }

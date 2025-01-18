@@ -1,6 +1,7 @@
 use falsec_types::source::Pos;
 use std::error::Error;
 use std::fmt;
+use std::rc::Rc;
 
 #[derive(Clone, Debug)]
 pub struct InterpreterError {
@@ -22,6 +23,7 @@ pub enum InterpreterErrorKind {
         to: &'static str,
     },
     IndexOutOfBounds(i64, usize),
+    IO(Rc<std::io::Error>),
 }
 
 impl Error for InterpreterError {}
@@ -45,6 +47,7 @@ impl fmt::Display for InterpreterErrorKind {
             IndexOutOfBounds(index, len) => {
                 write!(f, "Index out of bounds: {} must be in 0..{}", index, len)
             }
+            IO(err) => write!(f, "IO error: {}", err),
         }
     }
 }
@@ -130,6 +133,20 @@ impl InterpreterError {
             current_lambda_id,
             program_counter,
             kind: InterpreterErrorKind::IndexOutOfBounds(index, len),
+        }
+    }
+
+    pub fn io_error(
+        err: std::io::Error,
+        pos: Pos,
+        current_lambda_id: u64,
+        program_counter: usize,
+    ) -> Self {
+        Self {
+            pos,
+            current_lambda_id,
+            program_counter,
+            kind: InterpreterErrorKind::IO(Rc::new(err)),
         }
     }
 }
