@@ -12,7 +12,7 @@ pub struct CompilerError {
 
 #[derive(Clone, Debug)]
 pub enum CompilerErrorKind {
-    IO(Rc<std::io::Error>),
+    IO(Rc<io::Error>),
 }
 
 impl Error for CompilerError {}

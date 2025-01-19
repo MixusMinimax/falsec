@@ -7,7 +7,7 @@ use std::fmt::Formatter;
 use std::io::Write;
 
 pub fn compile<'source, Output: Write>(
-    CompileRequest { .. }: CompileRequest<'source, Output>,
+    CompileRequest { output, .. }: CompileRequest<'source, Output>,
 ) -> Result<(), CompilerError> {
     let mut assembly = Assembly::<'source>::default();
     assembly.add_instructions(
@@ -36,6 +36,7 @@ pub fn compile<'source, Output: Write>(
             Instruction::Syscall,
         ],
     );
+    write_assembly(assembly, output)?;
     Ok(())
 }
 
@@ -144,8 +145,93 @@ impl fmt::Display for SectionId {
 }
 
 fn write_assembly(assembly: Assembly, mut output: impl Write) -> Result<(), CompilerError> {
-    for Section { section_id, .. } in assembly.sections.into_values() {
-        write!(output, "\tSECTION {}", section_id)?;
+    for Section {
+        section_id,
+        instructions,
+    } in assembly.sections.into_values()
+    {
+        writeln!(output, "\tSECTION {}", section_id)?;
+        let mut current_line = Vec::<u8>::new();
+        let mut previous_instruction_was_label = false;
+        for instruction in instructions {
+            if !current_line.is_empty()
+                && match instruction {
+                    Instruction::CommentEndOfLine(..) => false,
+                    Instruction::DB(..) | Instruction::Equ(..)
+                        if previous_instruction_was_label && current_line.len() < 8 =>
+                    {
+                        false
+                    }
+                    _ => true,
+                }
+            {
+                output.write_all(&current_line)?;
+                writeln!(output)?;
+                current_line.clear();
+            }
+            previous_instruction_was_label = matches!(instruction, Instruction::Label(..));
+            match instruction {
+                Instruction::Comment(comment) => writeln!(output, "; {}", comment)?,
+                Instruction::DB(bytes) => {
+                    write!(current_line, "\tDB ")?;
+                    let mut in_string = false;
+                    let mut first = true;
+                    for byte in bytes.iter() {
+                        if byte.is_ascii_alphanumeric() || b" ,.!?".contains(byte) {
+                            if !in_string {
+                                if !first {
+                                    write!(current_line, ", ")?;
+                                }
+                                write!(current_line, "\"")?;
+                                in_string = true;
+                            }
+                            write!(current_line, "{}", *byte as char)?;
+                        } else {
+                            if in_string {
+                                write!(current_line, "\"")?;
+                                in_string = false;
+                            }
+                            if !first {
+                                write!(current_line, ", ")?;
+                            }
+                            write!(current_line, "{:#04x}", byte)?;
+                        }
+                        first = false;
+                    }
+                    if in_string {
+                        write!(current_line, "\"")?;
+                    }
+                }
+                Instruction::Equ(expr) => write!(current_line, "\tEQU {}", expr)?,
+                Instruction::Global(symbol) => write!(current_line, "\tglobal {}", symbol)?,
+                Instruction::Label(label) => write!(current_line, "{}:", label)?,
+                _ => (),
+            }
+        }
+        if !current_line.is_empty() {
+            output.write_all(&current_line)?;
+            writeln!(output)?;
+            current_line.clear();
+        }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::linux_x86_64_elf::compile;
+    use crate::CompileRequest;
+
+    #[test]
+    fn simple_compile() {
+        let mut output = Vec::new();
+        compile(CompileRequest {
+            output: &mut output,
+            source: "\"Hello, World!\"10,\n",
+            program: Default::default(),
+        })
+        .unwrap();
+        let asm = String::from_utf8(output).unwrap();
+        assert_ne!(asm.len(), 0);
+    }
 }
