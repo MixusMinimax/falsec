@@ -12,34 +12,23 @@ pub fn compile<Output: Write>(
     output: Output,
     config: Config,
 ) -> Result<(), CompilerError> {
-    fn lambda_label(id: u64) -> String {
-        format!(".L{}", id)
-    }
     let mut asm = Assembly {
         config: config.clone(),
         ..Default::default()
     };
     asm.add_instructions(
-        SectionId::Data,
-        [
-            Instruction::Label(Cow::Borrowed("msg")),
-            Instruction::DB(Cow::Borrowed(b"Hello, World!\n")),
-            Instruction::Label(Cow::Borrowed("len")),
-            Instruction::Equ(Cow::Borrowed("$-msg")),
-        ],
-    );
-    asm.add_instructions(
         SectionId::Text,
         [
-            Instruction::Global(Cow::Borrowed("_start")),
-            Instruction::Global(Cow::Borrowed("main")),
-            Instruction::Label(Cow::Borrowed("_start")),
-            Instruction::Label(Cow::Borrowed("main")),
-            Instruction::Jmp(Operand::Label(lambda_label(program.main_id).into())),
+            Instruction::Global(Label::Named(Cow::Borrowed("_start"))),
+            Instruction::Global(Label::Named(Cow::Borrowed("main"))),
+            Instruction::Label(Label::Named(Cow::Borrowed("_start"))),
+            Instruction::Label(Label::Named(Cow::Borrowed("main"))),
         ],
     );
+    asm.call(Label::Lambda(program.main_id)).exit(0);
+
     for (id, lambda) in program.lambdas {
-        asm.ins(Instruction::Label(Cow::Owned(lambda_label(id))));
+        asm.ins(Instruction::Label(Label::Lambda(id)));
         for (command, span) in lambda {
             if config.write_command_comments {
                 asm.ins(Instruction::Comment(Cow::Owned(format!(
@@ -54,8 +43,10 @@ pub fn compile<Output: Write>(
                 Command::CharLiteral(c) => asm
                     .mov(Register::RAX, Operand::Immediate(c as u64))
                     .push(Register::RAX, ValueType::Number),
-                Command::Dup => asm.peek(Register::RAX).push(Register::RAX, ValueType::Any),
-                Command::Drop => asm.drop(),
+                Command::Dup => asm
+                    .peek_any(Register::RAX)
+                    .push(Register::RAX, ValueTypeSelector::Current),
+                Command::Drop => asm.ins(Instruction::Dec(Register::STACK_COUNTER.into())),
                 Command::Swap => {
                     asm.mov(
                         Register::RAX,
@@ -93,6 +84,59 @@ pub fn compile<Output: Write>(
                     }
                     &mut asm
                 }
+                Command::Rot => {
+                    asm.mov(
+                        Register::RAX,
+                        Address::biis(Register::STACK_BASE, Register::STACK_COUNTER, -1, 8),
+                    )
+                    .mov(
+                        Register::RDX,
+                        Address::biis(Register::STACK_BASE, Register::STACK_COUNTER, -2, 8),
+                    )
+                    .mov(
+                        Register::RSI,
+                        Address::biis(Register::STACK_BASE, Register::STACK_COUNTER, -3, 8),
+                    )
+                    .mov(
+                        Address::biis(Register::STACK_BASE, Register::STACK_COUNTER, -1, 8),
+                        Register::RSI,
+                    )
+                    .mov(
+                        Address::biis(Register::STACK_BASE, Register::STACK_COUNTER, -2, 8),
+                        Register::RAX,
+                    )
+                    .mov(
+                        Address::biis(Register::STACK_BASE, Register::STACK_COUNTER, -3, 8),
+                        Register::RDX,
+                    );
+                    if config.type_safety != TypeSafety::None {
+                        asm.mov(
+                            Register::AL,
+                            Address::bii(Register::TYPE_STACK_BASE, Register::STACK_COUNTER, -1),
+                        )
+                        .mov(
+                            Register::DL,
+                            Address::bii(Register::TYPE_STACK_BASE, Register::STACK_COUNTER, -2),
+                        )
+                        .mov(
+                            Register::SIL,
+                            Address::bii(Register::TYPE_STACK_BASE, Register::STACK_COUNTER, -3),
+                        )
+                        .mov(
+                            Address::bii(Register::TYPE_STACK_BASE, Register::STACK_COUNTER, -1),
+                            Register::SIL,
+                        )
+                        .mov(
+                            Address::bii(Register::TYPE_STACK_BASE, Register::STACK_COUNTER, -2),
+                            Register::AL,
+                        )
+                        .mov(
+                            Address::bii(Register::TYPE_STACK_BASE, Register::STACK_COUNTER, -3),
+                            Register::DL,
+                        );
+                    }
+                    &mut asm
+                }
                 _ => todo!(),
             };
         }
@@ -101,13 +145,25 @@ pub fn compile<Output: Write>(
     Ok(())
 }
 
-#[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug, Default)]
+#[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug)]
 enum ValueType {
     Number,
     Variable,
     Lambda,
+}
+
+#[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug, Default)]
+enum ValueTypeSelector {
     #[default]
+    Current,
     Any,
+    ValueType(ValueType),
+}
+
+impl From<ValueType> for ValueTypeSelector {
+    fn from(value: ValueType) -> Self {
+        Self::ValueType(value)
+    }
 }
 
 impl ValueType {
@@ -117,7 +173,6 @@ impl ValueType {
             ValueType::Number => 0,
             ValueType::Variable => 2,
             ValueType::Lambda => 1,
-            ValueType::Any => unreachable!(),
         }
     }
 }
@@ -143,10 +198,26 @@ struct Section<'source> {
     instructions: Vec<Instruction<'source>>,
 }
 
-#[derive(Debug, Default)]
+#[derive(Clone, Debug, Default)]
 struct Assembly<'source> {
     sections: HashMap<SectionId, Section<'source>>,
     config: Config,
+    label_generator: LabelGenerator,
+}
+
+#[derive(Copy, Clone, Debug, Default)]
+struct LabelGenerator {
+    next_id: u64,
+}
+
+impl Iterator for LabelGenerator {
+    type Item = Label<'static>;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        let id = self.next_id;
+        self.next_id += 1;
+        Some(Label::Local(id))
+    }
 }
 
 impl<'source> Assembly<'source> {
@@ -169,6 +240,26 @@ impl<'source> Assembly<'source> {
         self.add_instructions(SectionId::Text, [instruction])
     }
 
+    fn call(&mut self, label: impl Into<Label<'source>>) -> &mut Self {
+        self.ins(Instruction::Call(label.into()))
+    }
+
+    fn cmp(&mut self, a: impl Into<Operand<'source>>, b: impl Into<Operand<'source>>) -> &mut Self {
+        self.ins(Instruction::Cmp(a.into(), b.into()))
+    }
+
+    fn je(&mut self, label: impl Into<Label<'source>>) -> &mut Self {
+        self.ins(Instruction::Je(label.into()))
+    }
+
+    fn label(&mut self, label: impl Into<Label<'source>>) -> &mut Self {
+        self.ins(Instruction::Label(label.into()))
+    }
+
+    fn lea(&mut self, dst: Register, src: impl Into<Operand<'source>>) -> &mut Self {
+        self.ins(Instruction::Lea(dst.into(), src.into()))
+    }
+
     fn mov(
         &mut self,
         dst: impl Into<Operand<'source>>,
@@ -176,75 +267,112 @@ impl<'source> Assembly<'source> {
     ) -> &mut Self {
         self.ins(Instruction::Mov(dst.into(), src.into()))
     }
+}
 
-    fn push(&mut self, register: Register, value_type: ValueType) -> &mut Self {
+fn label_expected_type(value_type: ValueType) -> Label<'static> {
+    Label::Named(Cow::Borrowed(match value_type {
+        ValueType::Number => "err_msg_expected_number",
+        ValueType::Variable => "err_msg_expected_variable",
+        ValueType::Lambda => "err_msg_expected_lambda",
+    }))
+}
+
+fn label_expected_type_len(value_type: ValueType) -> Label<'static> {
+    Label::Named(Cow::Borrowed(match value_type {
+        ValueType::Number => "err_msg_expected_number_len",
+        ValueType::Variable => "err_msg_expected_variable_len",
+        ValueType::Lambda => "err_msg_expected_lambda_len",
+    }))
+}
+
+impl<'source> Assembly<'source> {
+    fn push(&mut self, register: Register, value_type: impl Into<ValueTypeSelector>) -> &mut Self {
+        let value_type = value_type.into();
+        assert_ne!(value_type, ValueTypeSelector::Any);
         self.mov(
-            Address {
-                base: Register::STACK_BASE,
-                index: Some(Register::STACK_COUNTER),
-                stride: 8,
-                ..Default::default()
-            },
+            Address::bis(Register::STACK_BASE, Register::STACK_COUNTER, 8),
             register,
         );
         if self.config.type_safety != TypeSafety::None {
-            if value_type != ValueType::Any {
+            if let ValueTypeSelector::ValueType(value_type) = value_type {
                 self.mov(Register::CUR_TYPE, Operand::Immediate(value_type.into_id()));
             }
             self.mov(
-                Address {
-                    base: Register::TYPE_STACK_BASE,
-                    index: Some(Register::STACK_COUNTER),
-                    stride: 1,
-                    ..Default::default()
-                },
+                Address::bi(Register::TYPE_STACK_BASE, Register::STACK_COUNTER),
                 Register::CUR_TYPE,
             );
         }
         self.ins(Instruction::Inc(Register::STACK_COUNTER.into()))
     }
 
-    fn peek(&mut self, register: Register) -> &mut Self {
+    fn peek_any(&mut self, register: Register) -> &mut Self {
         self.mov(
             register,
-            Address {
-                base: Register::STACK_BASE,
-                index: Some(Register::STACK_COUNTER),
-                index_offset: -1,
-                stride: 8,
-                ..Default::default()
-            },
+            Address::biis(Register::STACK_BASE, Register::STACK_COUNTER, -1, 8),
         );
         if self.config.type_safety != TypeSafety::None {
             self.mov(
                 Register::CUR_TYPE,
-                Address {
-                    base: Register::TYPE_STACK_BASE,
-                    index: Some(Register::STACK_COUNTER),
-                    index_offset: -1,
-                    ..Default::default()
-                },
+                Address::bii(Register::TYPE_STACK_BASE, Register::STACK_COUNTER, -1),
             );
         }
         self
     }
 
-    fn drop(&mut self) -> &mut Self {
-        self.ins(Instruction::Dec(Register::STACK_COUNTER.into()))
+    fn peek(&mut self, register: Register, value_type: impl Into<ValueTypeSelector>) -> &mut Self {
+        let value_type = value_type.into();
+        self.peek_any(register);
+        if let ValueTypeSelector::ValueType(value_type) = value_type {
+            self.verify_current(value_type);
+        }
+        self
+    }
+
+    fn verify_current(&mut self, value_type: ValueType) -> &mut Self {
+        match (self.config.type_safety, value_type) {
+            (TypeSafety::Lambda, ValueType::Lambda) => (),
+            (TypeSafety::LambdaAndVar, ValueType::Lambda | ValueType::Variable) => (),
+            (TypeSafety::Full, _) => (),
+            _ => return self,
+        };
+        let label = self.label_generator.next().unwrap();
+        self.cmp(Register::CUR_TYPE, value_type.into_id())
+            .je(label.clone())
+            .mov(Register::RDI, 2) // stderr
+            .lea(Register::RSI, label_expected_type(value_type))
+            .mov(Register::RDX, label_expected_type_len(value_type))
+            .call(Label::PrintString)
+            .exit(1)
+            .label(label)
+    }
+
+    fn exit(&mut self, code: u64) -> &mut Self {
+        self.mov(Register::RAX, 60)
+            .mov(Register::RDI, code)
+            .ins(Instruction::Syscall)
     }
 }
 
 #[derive(Clone, Debug)]
 enum Instruction<'source> {
+    Call(Label<'source>),
+    Cmp(Operand<'source>, Operand<'source>),
     Comment(Cow<'source, str>),
     CommentEndOfLine(Cow<'source, str>),
     DB(Cow<'source, [u8]>),
     Dec(Operand<'source>),
     Equ(Cow<'source, str>),
-    Global(Cow<'source, str>),
+    Global(Label<'source>),
     Inc(Operand<'source>),
-    Jmp(Operand<'source>),
-    Label(Cow<'source, str>),
+    Je(Label<'source>),
+    Jmp(Label<'source>),
+    Label(Label<'source>),
+    Lea(
+        /// Destination
+        Register,
+        /// Source
+        Operand<'source>,
+    ),
     Mov(
         /// Destination
         Operand<'source>,
@@ -258,8 +386,19 @@ enum Instruction<'source> {
 enum Operand<'source> {
     Register(Register),
     Immediate(u64),
-    Label(Cow<'source, str>),
+    Label(Label<'source>),
     Address(Address),
+}
+
+#[derive(Clone, Debug)]
+enum Label<'source> {
+    Lambda(u64),
+    Local(u64),
+    PrintDecimal,
+    PrintString,
+    PrintChar,
+    FlushStdout,
+    Named(Cow<'source, str>),
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug, Default)]
@@ -273,12 +412,31 @@ struct Address {
 }
 
 impl Address {
+    /// `[base+index]`
+    fn bi(base: Register, index: Register) -> Self {
+        Self {
+            base,
+            index: Some(index),
+            ..Default::default()
+        }
+    }
+
     /// `[base+(index+index_offset)]`
     fn bii(base: Register, index: Register, index_offset: i64) -> Self {
         Self {
             base,
             index: Some(index),
             index_offset,
+            ..Default::default()
+        }
+    }
+
+    /// `[base+index*stride]`
+    fn bis(base: Register, index: Register, stride: u64) -> Self {
+        Self {
+            base,
+            index: Some(index),
+            stride,
             ..Default::default()
         }
     }
@@ -301,9 +459,21 @@ impl From<Register> for Operand<'_> {
     }
 }
 
+impl From<u64> for Operand<'_> {
+    fn from(value: u64) -> Self {
+        Operand::Immediate(value)
+    }
+}
+
 impl From<Address> for Operand<'_> {
     fn from(address: Address) -> Self {
         Operand::Address(address)
+    }
+}
+
+impl<'source> From<Label<'source>> for Operand<'source> {
+    fn from(value: Label<'source>) -> Self {
+        Operand::Label(value)
     }
 }
 
@@ -322,6 +492,7 @@ impl Register {
 
     const AL: Self = Self(RegisterSize::L, RegisterName::AX);
     const DL: Self = Self(RegisterSize::L, RegisterName::DX);
+    const SIL: Self = Self(RegisterSize::L, RegisterName::SI);
 
     /// Stack counter used for the data stack. The data stack is separate from the call stack.
     const STACK_COUNTER: Self = Self(RegisterSize::R, RegisterName::R12);
@@ -404,8 +575,22 @@ impl fmt::Display for Operand<'_> {
         match self {
             Operand::Register(r) => write!(f, "{}", r),
             Operand::Immediate(i) => write!(f, "{}", i),
-            Operand::Label(label) => write!(f, "{}", label),
+            Operand::Label(label) => write!(f, "[rel {}]", label),
             Operand::Address(address) => write!(f, "{}", address),
+        }
+    }
+}
+
+impl fmt::Display for Label<'_> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            Label::Lambda(id) => write!(f, "_lambda_{}", id),
+            Label::Local(id) => write!(f, "_local_{:03}", id),
+            Label::PrintDecimal => write!(f, "print_decimal"),
+            Label::PrintString => write!(f, "print_string"),
+            Label::PrintChar => write!(f, "print_char"),
+            Label::FlushStdout => write!(f, "flush_stdout"),
+            Label::Named(name) => write!(f, "{}", name),
         }
     }
 }
@@ -504,6 +689,8 @@ fn write_assembly(assembly: Assembly, mut output: impl Write) -> Result<(), Comp
             }
             previous_instruction_was_label = matches!(instruction, Instruction::Label(..));
             match instruction {
+                Instruction::Call(label) => writeln!(output, "\tcall [rel {}]", label)?,
+                Instruction::Cmp(a, b) => writeln!(output, "\tcmp {}, {}", a, b)?,
                 Instruction::Comment(comment) => writeln!(output, "; {}", comment)?,
                 Instruction::CommentEndOfLine(_) => todo!(),
                 Instruction::DB(bytes) => {
@@ -540,8 +727,10 @@ fn write_assembly(assembly: Assembly, mut output: impl Write) -> Result<(), Comp
                 Instruction::Equ(expr) => write!(current_line, "\tequ {}", expr)?,
                 Instruction::Global(symbol) => write!(current_line, "\tglobal {}", symbol)?,
                 Instruction::Inc(operand) => write!(current_line, "\tinc {}", operand)?,
-                Instruction::Jmp(_) => todo!(),
+                Instruction::Je(label) => write!(current_line, "\tje [rel {}]", label)?,
+                Instruction::Jmp(label) => write!(current_line, "\tjmp [rel {}]", label)?,
                 Instruction::Label(label) => write!(current_line, "{}:", label)?,
+                Instruction::Lea(dst, src) => write!(current_line, "\tlea {}, {}", dst, src)?,
                 Instruction::Mov(dst, src) => write!(current_line, "\tmov {}, {}", dst, src)?,
                 Instruction::Syscall => write!(current_line, "\tsyscall")?,
             }

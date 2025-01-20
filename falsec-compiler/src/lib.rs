@@ -50,10 +50,14 @@ pub fn compile<Output: Write>(
 mod tests {
     use crate::{compile, CompileRequest};
     use falsec_types::source::Program;
+    use std::collections::HashMap;
 
     #[test]
     fn test_compile() {
-        let program = Program::default();
+        let program = Program {
+            main_id: 0,
+            lambdas: HashMap::from([(0, Vec::new())]),
+        };
         let mut output = Vec::<u8>::new();
         compile(CompileRequest {
             source: "",

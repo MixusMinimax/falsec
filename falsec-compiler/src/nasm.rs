@@ -29,7 +29,11 @@ pub fn assemble(assembly_path: &Path, output_path: &Path, target: Target) {
         .unwrap()
     {
         Output { status, stderr, .. } if !status.success() => {
-            panic!("Failed to assemble: {}", String::from_utf8(stderr).unwrap())
+            panic!(
+                "Failed to assemble: {}\n{}",
+                String::from_utf8(stderr).unwrap(),
+                std::fs::read_to_string(assembly_path).unwrap()
+            )
         }
         _ => (),
     };
