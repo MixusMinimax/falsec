@@ -1,15 +1,13 @@
 use crate::error::CompilerError;
-use crate::CompileRequest;
+use falsec_types::source::Program;
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::fmt;
 use std::fmt::Formatter;
 use std::io::Write;
 
-pub fn compile<'source, Output: Write>(
-    CompileRequest { output, .. }: CompileRequest<'source, Output>,
-) -> Result<(), CompilerError> {
-    let mut assembly = Assembly::<'source>::default();
+pub fn compile<Output: Write>(_program: Program, output: Output) -> Result<(), CompilerError> {
+    let mut assembly = Assembly::default();
     assembly.add_instructions(
         SectionId::Data,
         &[
@@ -100,7 +98,7 @@ enum Operand<'source> {
     Label(Cow<'source, str>),
 }
 
-impl<'source> From<Register> for Operand<'source> {
+impl From<Register> for Operand<'_> {
     fn from(register: Register) -> Self {
         Operand::Register(register)
     }
@@ -140,6 +138,31 @@ impl fmt::Display for SectionId {
             SectionId::RoData => write!(f, ".rodata"),
             SectionId::RoData1 => write!(f, ".rodata1"),
             SectionId::Text => write!(f, ".text"),
+        }
+    }
+}
+
+impl fmt::Display for Operand<'_> {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            Operand::Register(r) => write!(f, "{}", r),
+            Operand::Immediate(i) => write!(f, "{}", i),
+            Operand::Label(label) => write!(f, "{}", label),
+        }
+    }
+}
+
+impl fmt::Display for Register {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            Register::Rax => write!(f, "rax"),
+            Register::Rbx => write!(f, "rbx"),
+            Register::Rcx => write!(f, "rcx"),
+            Register::Rsp => write!(f, "rsp"),
+            Register::Rbp => write!(f, "rbp"),
+            Register::Rdi => write!(f, "rdi"),
+            Register::Rsi => write!(f, "rsi"),
+            Register::Rdx => write!(f, "rdx"),
         }
     }
 }
@@ -202,9 +225,11 @@ fn write_assembly(assembly: Assembly, mut output: impl Write) -> Result<(), Comp
                         write!(current_line, "\"")?;
                     }
                 }
-                Instruction::Equ(expr) => write!(current_line, "\tEQU {}", expr)?,
+                Instruction::Equ(expr) => write!(current_line, "\tequ {}", expr)?,
                 Instruction::Global(symbol) => write!(current_line, "\tglobal {}", symbol)?,
                 Instruction::Label(label) => write!(current_line, "{}:", label)?,
+                Instruction::Mov(dst, src) => write!(current_line, "\tmov {}, {}", dst, src)?,
+                Instruction::Syscall => write!(current_line, "\tsyscall")?,
                 _ => (),
             }
         }
@@ -220,17 +245,11 @@ fn write_assembly(assembly: Assembly, mut output: impl Write) -> Result<(), Comp
 #[cfg(test)]
 mod tests {
     use crate::linux_x86_64_elf::compile;
-    use crate::CompileRequest;
 
     #[test]
     fn simple_compile() {
         let mut output = Vec::new();
-        compile(CompileRequest {
-            output: &mut output,
-            source: "\"Hello, World!\"10,\n",
-            program: Default::default(),
-        })
-        .unwrap();
+        compile(Default::default(), &mut output).unwrap();
         let asm = String::from_utf8(output).unwrap();
         assert_ne!(asm.len(), 0);
     }
