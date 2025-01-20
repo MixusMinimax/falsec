@@ -15,11 +15,11 @@ pub fn compile<Output: Write>(
     fn lambda_label(id: u64) -> String {
         format!(".L{}", id)
     }
-    let mut assembly = Assembly {
+    let mut asm = Assembly {
         config: config.clone(),
         ..Default::default()
     };
-    assembly.add_instructions(
+    asm.add_instructions(
         SectionId::Data,
         [
             Instruction::Label(Cow::Borrowed("msg")),
@@ -28,7 +28,7 @@ pub fn compile<Output: Write>(
             Instruction::Equ(Cow::Borrowed("$-msg")),
         ],
     );
-    assembly.add_instructions(
+    asm.add_instructions(
         SectionId::Text,
         [
             Instruction::Global(Cow::Borrowed("_start")),
@@ -39,26 +39,65 @@ pub fn compile<Output: Write>(
         ],
     );
     for (id, lambda) in program.lambdas {
-        assembly.ins(Instruction::Label(Cow::Owned(lambda_label(id))));
+        asm.ins(Instruction::Label(Cow::Owned(lambda_label(id))));
         for (command, span) in lambda {
             if config.write_command_comments {
-                assembly.ins(Instruction::Comment(Cow::Owned(format!(
+                asm.ins(Instruction::Comment(Cow::Owned(format!(
                     "-- {} --",
                     span.source,
                 ))));
             }
             match command {
-                Command::IntLiteral(i) => assembly
+                Command::IntLiteral(i) => asm
                     .mov(Register::RAX, Operand::Immediate(i))
                     .push(Register::RAX, ValueType::Number),
-                Command::CharLiteral(c) => assembly
+                Command::CharLiteral(c) => asm
                     .mov(Register::RAX, Operand::Immediate(c as u64))
                     .push(Register::RAX, ValueType::Number),
+                Command::Dup => asm.peek(Register::RAX).push(Register::RAX, ValueType::Any),
+                Command::Drop => asm.drop(),
+                Command::Swap => {
+                    asm.mov(
+                        Register::RAX,
+                        Address::biis(Register::STACK_BASE, Register::STACK_COUNTER, -1, 8),
+                    )
+                    .mov(
+                        Register::RDX,
+                        Address::biis(Register::STACK_BASE, Register::STACK_COUNTER, -2, 8),
+                    )
+                    .mov(
+                        Address::biis(Register::STACK_BASE, Register::STACK_COUNTER, -1, 8),
+                        Register::RDX,
+                    )
+                    .mov(
+                        Address::biis(Register::STACK_BASE, Register::STACK_COUNTER, -2, 8),
+                        Register::RAX,
+                    );
+                    if config.type_safety != TypeSafety::None {
+                        asm.mov(
+                            Register::AL,
+                            Address::bii(Register::TYPE_STACK_BASE, Register::STACK_COUNTER, -1),
+                        )
+                        .mov(
+                            Register::DL,
+                            Address::bii(Register::TYPE_STACK_BASE, Register::STACK_COUNTER, -2),
+                        )
+                        .mov(
+                            Address::bii(Register::TYPE_STACK_BASE, Register::STACK_COUNTER, -1),
+                            Register::DL,
+                        )
+                        .mov(
+                            Address::bii(Register::TYPE_STACK_BASE, Register::STACK_COUNTER, -2),
+                            Register::AL,
+                        );
+                    }
+                    &mut asm
+                }
                 _ => todo!(),
             };
         }
     }
-    write_assembly(assembly, output)?;
+    write_assembly(asm, output)?;
     Ok(())
 }
 
@@ -115,7 +154,7 @@ impl<'source> Assembly<'source> {
         &mut self,
         section_id: SectionId,
         instructions: impl AsRef<[Instruction<'source>]>,
-    ) -> &mut Assembly<'source> {
+    ) -> &mut Self {
         let section = self.sections.entry(section_id).or_insert_with(|| Section {
             section_id,
             instructions: Vec::new(),
@@ -126,7 +165,7 @@ impl<'source> Assembly<'source> {
         self
     }
 
-    fn ins(&mut self, instruction: Instruction<'source>) -> &mut Assembly<'source> {
+    fn ins(&mut self, instruction: Instruction<'source>) -> &mut Self {
         self.add_instructions(SectionId::Text, [instruction])
     }
 
@@ -134,12 +173,11 @@ impl<'source> Assembly<'source> {
         &mut self,
         dst: impl Into<Operand<'source>>,
         src: impl Into<Operand<'source>>,
-    ) -> &mut Assembly<'source> {
+    ) -> &mut Self {
         self.ins(Instruction::Mov(dst.into(), src.into()))
     }
 
-    fn push(&mut self, register: Register, value_type: ValueType) -> &mut Assembly<'source> {
-        assert_ne!(value_type, ValueType::Any);
+    fn push(&mut self, register: Register, value_type: ValueType) -> &mut Self {
         self.mov(
             Address {
                 base: Register::STACK_BASE,
@@ -150,18 +188,49 @@ impl<'source> Assembly<'source> {
             register,
         );
         if self.config.type_safety != TypeSafety::None {
-            self.mov(Register::CUR_TYPE, Operand::Immediate(value_type.into_id()))
-                .mov(
-                    Address {
-                        base: Register::TYPE_STACK_BASE,
-                        index: Some(Register::STACK_COUNTER),
-                        stride: 1,
-                        ..Default::default()
-                    },
-                    Register::CUR_TYPE,
-                );
+            if value_type != ValueType::Any {
+                self.mov(Register::CUR_TYPE, Operand::Immediate(value_type.into_id()));
+            }
+            self.mov(
+                Address {
+                    base: Register::TYPE_STACK_BASE,
+                    index: Some(Register::STACK_COUNTER),
+                    stride: 1,
+                    ..Default::default()
+                },
+                Register::CUR_TYPE,
+            );
         }
         self.ins(Instruction::Inc(Register::STACK_COUNTER.into()))
+    }
+
+    fn peek(&mut self, register: Register) -> &mut Self {
+        self.mov(
+            register,
+            Address {
+                base: Register::STACK_BASE,
+                index: Some(Register::STACK_COUNTER),
+                index_offset: -1,
+                stride: 8,
+                ..Default::default()
+            },
+        );
+        if self.config.type_safety != TypeSafety::None {
+            self.mov(
+                Register::CUR_TYPE,
+                Address {
+                    base: Register::TYPE_STACK_BASE,
+                    index: Some(Register::STACK_COUNTER),
+                    index_offset: -1,
+                    ..Default::default()
+                },
+            );
+        }
+        self
+    }
+
+    fn drop(&mut self) -> &mut Self {
+        self.ins(Instruction::Dec(Register::STACK_COUNTER.into()))
     }
 }
 
@@ -170,6 +239,7 @@ enum Instruction<'source> {
     Comment(Cow<'source, str>),
     CommentEndOfLine(Cow<'source, str>),
     DB(Cow<'source, [u8]>),
+    Dec(Operand<'source>),
     Equ(Cow<'source, str>),
     Global(Cow<'source, str>),
     Inc(Operand<'source>),
@@ -192,14 +262,37 @@ enum Operand<'source> {
     Address(Address),
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Copy, Clone, PartialEq, Eq, Debug, Default)]
 struct Address {
     base: Register,
     index: Option<Register>,
-    index_offset: u64,
+    index_offset: i64,
     /// 0 is treated as 1, to make the Default derive work. 0 is not a valid value.
     stride: u64,
-    address_offset: u64,
+    address_offset: i64,
+}
+
+impl Address {
+    /// `[base+(index+index_offset)]`
+    fn bii(base: Register, index: Register, index_offset: i64) -> Self {
+        Self {
+            base,
+            index: Some(index),
+            index_offset,
+            ..Default::default()
+        }
+    }
+
+    /// `[base+(index+index_offset)*stride]`
+    fn biis(base: Register, index: Register, index_offset: i64, stride: u64) -> Self {
+        Self {
+            base,
+            index: Some(index),
+            index_offset,
+            stride,
+            ..Default::default()
+        }
+    }
 }
 
 impl From<Register> for Operand<'_> {
@@ -226,6 +319,9 @@ impl Register {
     const RDI: Self = Self(RegisterSize::R, RegisterName::DI);
     const RSI: Self = Self(RegisterSize::R, RegisterName::SI);
     const RDX: Self = Self(RegisterSize::R, RegisterName::DX);
+
+    const AL: Self = Self(RegisterSize::L, RegisterName::AX);
+    const DL: Self = Self(RegisterSize::L, RegisterName::DX);
 
     /// Stack counter used for the data stack. The data stack is separate from the call stack.
     const STACK_COUNTER: Self = Self(RegisterSize::R, RegisterName::R12);
@@ -440,6 +536,7 @@ fn write_assembly(assembly: Assembly, mut output: impl Write) -> Result<(), Comp
                         write!(current_line, "\"")?;
                     }
                 }
+                Instruction::Dec(operand) => write!(current_line, "\tdec {}", operand)?,
                 Instruction::Equ(expr) => write!(current_line, "\tequ {}", expr)?,
                 Instruction::Global(symbol) => write!(current_line, "\tglobal {}", symbol)?,
                 Instruction::Inc(operand) => write!(current_line, "\tinc {}", operand)?,
