@@ -16,9 +16,11 @@ pub struct Config {
     pub string_escape_sequences: bool,
     #[cfg_attr(feature = "serde", serde(default))]
     pub type_safety: TypeSafety,
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub write_command_comments: bool,
 }
 
-#[derive(Copy, Clone, PartialEq, Eq, Debug, Default)]
+#[derive(Copy, Clone, PartialOrd, Ord, PartialEq, Eq, Debug, Default)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 #[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
 pub enum TypeSafety {

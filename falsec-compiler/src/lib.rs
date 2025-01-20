@@ -1,5 +1,6 @@
 use crate::error::CompilerError;
 use falsec_types::source::Program;
+use falsec_types::Config;
 use std::io;
 use std::io::Write;
 use tempfile::NamedTempFile;
@@ -21,6 +22,7 @@ pub struct CompileRequest<'source, Output: Write> {
     pub program: Program<'source>,
     pub output: Output,
     pub target: Target,
+    pub config: Config,
 }
 
 pub fn compile<Output: Write>(
@@ -28,12 +30,13 @@ pub fn compile<Output: Write>(
         program,
         target,
         mut output,
+        config,
         ..
     }: CompileRequest<Output>,
 ) -> Result<(), CompilerError> {
     let mut assembly_file = NamedTempFile::new()?;
     match target {
-        Target::LinuxX86_64Elf => linux_x86_64_elf::compile(program, &mut assembly_file)?,
+        Target::LinuxX86_64Elf => linux_x86_64_elf::compile(program, &mut assembly_file, config)?,
         t => panic!("Unsupported target: {:?}", t),
     }
     let mut output_file = NamedTempFile::new()?;
@@ -57,6 +60,7 @@ mod tests {
             program,
             output: &mut output,
             target: super::Target::LinuxX86_64Elf,
+            config: Default::default(),
         })
         .unwrap();
         assert_ne!(output.len(), 0);
