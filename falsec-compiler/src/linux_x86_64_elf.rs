@@ -46,7 +46,7 @@ pub fn compile<Output: Write>(
                 Command::Dup => asm
                     .peek_any(Register::RAX)
                     .push(Register::RAX, ValueTypeSelector::Current),
-                Command::Drop => asm.ins(Instruction::Dec(Register::STACK_COUNTER.into())),
+                Command::Drop => asm.dec(Register::STACK_COUNTER),
                 Command::Swap => {
                     asm.mov(
                         Register::RAX,
@@ -137,6 +137,77 @@ pub fn compile<Output: Write>(
                     }
                     &mut asm
                 }
+                Command::Pick => {
+                    asm.peek(Register::RAX, ValueType::Number)
+                        .mov(Register::RSI, Register::STACK_COUNTER)
+                        .sub(Register::RSI, Register::RAX)
+                        .mov(
+                            Register::RAX,
+                            Address::biis(Register::STACK_BASE, Register::RSI, -2, 8),
+                        );
+                    if config.type_safety != TypeSafety::None {
+                        asm.mov(
+                            Register::CUR_TYPE,
+                            Address::bii(Register::TYPE_STACK_BASE, Register::RSI, -2),
+                        );
+                    }
+                    asm.replace(Register::RAX, ValueTypeSelector::Current)
+                }
+                Command::Add => asm
+                    .pop(Register::RDX, ValueType::Number)
+                    .peek(Register::RAX, ValueType::Number)
+                    .add(Register::RAX, Register::RDX)
+                    .replace(Register::RAX, ValueType::Number),
+                Command::Sub => asm
+                    .pop(Register::RDX, ValueType::Number)
+                    .peek(Register::RAX, ValueType::Number)
+                    .sub(Register::RAX, Register::RDX)
+                    .replace(Register::RAX, ValueType::Number),
+                Command::Mul => asm
+                    .pop(Register::RDX, ValueType::Number)
+                    .peek(Register::RAX, ValueType::Number)
+                    .mul(Register::RAX, Register::RDX)
+                    .replace(Register::RAX, ValueType::Number),
+                Command::Div => asm
+                    .pop(Register::RDI, ValueType::Number)
+                    .peek(Register::RAX, ValueType::Number)
+                    .ins(Instruction::Cqo)
+                    .idiv(Register::RDI)
+                    .replace(Register::RAX, ValueType::Number),
+                Command::Neg => asm
+                    .peek(Register::RAX, ValueType::Number)
+                    .neg(Register::RAX)
+                    .replace(Register::RAX, ValueType::Number),
+                Command::BitAnd => asm
+                    .pop(Register::RDX, ValueType::Number)
+                    .peek(Register::RAX, ValueType::Number)
+                    .and(Register::RAX, Register::RDX)
+                    .replace(Register::RAX, ValueType::Number),
+                Command::BitOr => asm
+                    .pop(Register::RDX, ValueType::Number)
+                    .peek(Register::RAX, ValueType::Number)
+                    .or(Register::RAX, Register::RDX)
+                    .replace(Register::RAX, ValueType::Number),
+                Command::BitNot => asm
+                    .peek(Register::RAX, ValueType::Number)
+                    .not(Register::RAX)
+                    .replace(Register::RAX, ValueType::Number),
+                Command::Gt => asm
+                    .pop(Register::RDX, ValueType::Number)
+                    .peek(Register::RAX, ValueType::Number)
+                    .cmp(Register::RAX, Register::RDX)
+                    .setg(Register::AL)
+                    .movzx(Register::RAX, Register::AL)
+                    .neg(Register::RAX)
+                    .replace(Register::RAX, ValueType::Number),
+                Command::Eq => asm
+                    .pop(Register::RDX, ValueType::Number)
+                    .peek(Register::RAX, ValueType::Number)
+                    .cmp(Register::RAX, Register::RDX)
+                    .sete(Register::AL)
+                    .movzx(Register::RAX, Register::AL)
+                    .neg(Register::RAX)
+                    .replace(Register::RAX, ValueType::Number),
                 _ => todo!(),
             };
         }
@@ -220,6 +291,47 @@ impl Iterator for LabelGenerator {
     }
 }
 
+/// ```
+/// use falsec_compiler::binop_fun;
+///
+/// binop_fun! {
+/// }
+/// ```
+#[macro_export]
+macro_rules! binop_fun {
+    ($(fn $fun:ident -> $op:ident$(;)*)*) => {
+        $(
+            fn $fun(
+                &mut self,
+                dst: impl Into<Operand<'source>>,
+                src: impl Into<Operand<'source>>,
+            ) -> &mut Self {
+                self.ins(Instruction::$op(dst.into(), src.into()))
+            }
+        )*
+    };
+}
+
+/// ```
+/// use falsec_compiler::unop_fun;
+///
+/// unop_fun! {
+/// }
+/// ```
+#[macro_export]
+macro_rules! unop_fun {
+    ($(fn $fun:ident -> $op:ident$(;)*)*) => {
+        $(
+            fn $fun(
+                &mut self,
+                operand: impl Into<Operand<'source>>,
+            ) -> &mut Self {
+                self.ins(Instruction::$op(operand.into()))
+            }
+        )*
+    };
+}
+
 impl<'source> Assembly<'source> {
     fn add_instructions(
         &mut self,
@@ -244,10 +356,6 @@ impl<'source> Assembly<'source> {
         self.ins(Instruction::Call(label.into()))
     }
 
-    fn cmp(&mut self, a: impl Into<Operand<'source>>, b: impl Into<Operand<'source>>) -> &mut Self {
-        self.ins(Instruction::Cmp(a.into(), b.into()))
-    }
-
     fn je(&mut self, label: impl Into<Label<'source>>) -> &mut Self {
         self.ins(Instruction::Je(label.into()))
     }
@@ -257,15 +365,29 @@ impl<'source> Assembly<'source> {
     }
 
     fn lea(&mut self, dst: Register, src: impl Into<Operand<'source>>) -> &mut Self {
-        self.ins(Instruction::Lea(dst.into(), src.into()))
+        self.ins(Instruction::Lea(dst, src.into()))
     }
 
-    fn mov(
-        &mut self,
-        dst: impl Into<Operand<'source>>,
-        src: impl Into<Operand<'source>>,
-    ) -> &mut Self {
-        self.ins(Instruction::Mov(dst.into(), src.into()))
+    binop_fun! {
+        fn add -> Add;
+        fn and -> And;
+        fn cmp -> Cmp;
+        fn mov -> Mov;
+        fn movzx -> MovZX;
+        fn mul -> Mul;
+        fn or -> Or;
+        fn sub -> Sub;
+        fn xor -> Xor;
+    }
+
+    unop_fun! {
+        fn dec -> Dec;
+        fn idiv -> IDiv;
+        fn inc -> Inc;
+        fn neg -> Neg;
+        fn not -> Not;
+        fn sete -> SetE;
+        fn setg -> SetG;
     }
 }
 
@@ -302,7 +424,7 @@ impl<'source> Assembly<'source> {
                 Register::CUR_TYPE,
             );
         }
-        self.ins(Instruction::Inc(Register::STACK_COUNTER.into()))
+        self.inc(Register::STACK_COUNTER)
     }
 
     fn peek_any(&mut self, register: Register) -> &mut Self {
@@ -324,6 +446,52 @@ impl<'source> Assembly<'source> {
         self.peek_any(register);
         if let ValueTypeSelector::ValueType(value_type) = value_type {
             self.verify_current(value_type);
+        }
+        self
+    }
+
+    fn pop_any(&mut self, register: Register) -> &mut Self {
+        self.dec(Register::STACK_COUNTER).mov(
+            register,
+            Address::bis(Register::STACK_BASE, Register::STACK_COUNTER, 8),
+        );
+        if self.config.type_safety != TypeSafety::None {
+            self.mov(
+                Register::CUR_TYPE,
+                Address::bi(Register::TYPE_STACK_BASE, Register::STACK_COUNTER),
+            );
+        }
+        self
+    }
+
+    fn pop(&mut self, register: Register, value_type: impl Into<ValueTypeSelector>) -> &mut Self {
+        let value_type = value_type.into();
+        self.pop_any(register);
+        if let ValueTypeSelector::ValueType(value_type) = value_type {
+            self.verify_current(value_type);
+        }
+        self
+    }
+
+    fn replace(
+        &mut self,
+        register: Register,
+        value_type: impl Into<ValueTypeSelector>,
+    ) -> &mut Self {
+        let value_type = value_type.into();
+        assert_ne!(value_type, ValueTypeSelector::Any);
+        self.mov(
+            Address::biis(Register::STACK_BASE, Register::STACK_COUNTER, -1, 8),
+            register,
+        );
+        if self.config.type_safety != TypeSafety::None {
+            if let ValueTypeSelector::ValueType(value_type) = value_type {
+                self.mov(Register::CUR_TYPE, value_type.into_id());
+            }
+            self.mov(
+                Address::bii(Register::TYPE_STACK_BASE, Register::STACK_COUNTER, -1),
+                Register::CUR_TYPE,
+            );
         }
         self
     }
@@ -355,14 +523,35 @@ impl<'source> Assembly<'source> {
 
 #[derive(Clone, Debug)]
 enum Instruction<'source> {
+    Add(
+        /// Destination
+        Operand<'source>,
+        /// Source
+        Operand<'source>,
+    ),
+    And(Operand<'source>, Operand<'source>),
     Call(Label<'source>),
+    CMovE(
+        /// Destination
+        Operand<'source>,
+        /// Source
+        Operand<'source>,
+    ),
+    CMovL(
+        /// Destination
+        Operand<'source>,
+        /// Source
+        Operand<'source>,
+    ),
     Cmp(Operand<'source>, Operand<'source>),
     Comment(Cow<'source, str>),
     CommentEndOfLine(Cow<'source, str>),
+    Cqo,
     DB(Cow<'source, [u8]>),
     Dec(Operand<'source>),
     Equ(Cow<'source, str>),
     Global(Label<'source>),
+    IDiv(Operand<'source>),
     Inc(Operand<'source>),
     Je(Label<'source>),
     Jmp(Label<'source>),
@@ -379,7 +568,36 @@ enum Instruction<'source> {
         /// Source
         Operand<'source>,
     ),
+    MovZX(
+        /// Destination
+        Operand<'source>,
+        /// Source
+        Operand<'source>,
+    ),
+    Mul(
+        /// Destination
+        Operand<'source>,
+        /// Source
+        Operand<'source>,
+    ),
+    Neg(Operand<'source>),
+    Not(Operand<'source>),
+    Or(Operand<'source>, Operand<'source>),
+    SetE(Operand<'source>),
+    SetG(Operand<'source>),
+    Sub(
+        /// Destination
+        Operand<'source>,
+        /// Source
+        Operand<'source>,
+    ),
     Syscall,
+    Xor(
+        /// Destination
+        Operand<'source>,
+        /// Source
+        Operand<'source>,
+    ),
 }
 
 #[derive(Clone, Debug)]
@@ -689,10 +907,15 @@ fn write_assembly(assembly: Assembly, mut output: impl Write) -> Result<(), Comp
             }
             previous_instruction_was_label = matches!(instruction, Instruction::Label(..));
             match instruction {
-                Instruction::Call(label) => writeln!(output, "\tcall [rel {}]", label)?,
-                Instruction::Cmp(a, b) => writeln!(output, "\tcmp {}, {}", a, b)?,
+                Instruction::Add(dst, src) => write!(current_line, "\tadd {}, {}", dst, src)?,
+                Instruction::And(dst, src) => write!(current_line, "\tand {}, {}", dst, src)?,
+                Instruction::Call(label) => write!(current_line, "\tcall [rel {}]", label)?,
+                Instruction::CMovE(dst, src) => write!(current_line, "\tcmove {}, {}", dst, src)?,
+                Instruction::CMovL(dst, src) => write!(current_line, "\tcmovl {}, {}", dst, src)?,
+                Instruction::Cmp(a, b) => write!(current_line, "\tcmp {}, {}", a, b)?,
                 Instruction::Comment(comment) => writeln!(output, "; {}", comment)?,
                 Instruction::CommentEndOfLine(_) => todo!(),
+                Instruction::Cqo => write!(current_line, "\tcqo")?,
                 Instruction::DB(bytes) => {
                     write!(current_line, "\tDB ")?;
                     let mut in_string = false;
@@ -726,13 +949,23 @@ fn write_assembly(assembly: Assembly, mut output: impl Write) -> Result<(), Comp
                 Instruction::Dec(operand) => write!(current_line, "\tdec {}", operand)?,
                 Instruction::Equ(expr) => write!(current_line, "\tequ {}", expr)?,
                 Instruction::Global(symbol) => write!(current_line, "\tglobal {}", symbol)?,
+                Instruction::IDiv(operand) => write!(current_line, "\tidiv {}", operand)?,
                 Instruction::Inc(operand) => write!(current_line, "\tinc {}", operand)?,
                 Instruction::Je(label) => write!(current_line, "\tje [rel {}]", label)?,
                 Instruction::Jmp(label) => write!(current_line, "\tjmp [rel {}]", label)?,
                 Instruction::Label(label) => write!(current_line, "{}:", label)?,
                 Instruction::Lea(dst, src) => write!(current_line, "\tlea {}, {}", dst, src)?,
                 Instruction::Mov(dst, src) => write!(current_line, "\tmov {}, {}", dst, src)?,
+                Instruction::MovZX(dst, src) => write!(current_line, "\tmovzx {}, {}", dst, src)?,
+                Instruction::Mul(dst, src) => write!(current_line, "\tmul {}, {}", dst, src)?,
+                Instruction::Neg(operand) => write!(current_line, "\tneg {}", operand)?,
+                Instruction::Not(operand) => write!(current_line, "\tnot {}", operand)?,
+                Instruction::Or(a, b) => write!(current_line, "\tor {}, {}", a, b)?,
+                Instruction::SetE(operand) => write!(current_line, "\tsete {}", operand)?,
+                Instruction::SetG(operand) => write!(current_line, "\tsetg {}", operand)?,
+                Instruction::Sub(dst, src) => write!(current_line, "\tsub {}, {}", dst, src)?,
                 Instruction::Syscall => write!(current_line, "\tsyscall")?,
+                Instruction::Xor(dst, src) => write!(current_line, "\txor {}, {}", dst, src)?,
             }
         }
         if !current_line.is_empty() {

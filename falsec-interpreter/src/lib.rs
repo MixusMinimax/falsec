@@ -297,12 +297,12 @@ impl<Input: Read, Output: Write> Interpreter<'_, Input, Output> {
                     }
                     state.push(state.data_stack[state.data_stack.len() - index as usize - 1]);
                 }
-                Command::Plus => {
+                Command::Add => {
                     let a = state.pop()?.into_integer(&self.config, &state)?;
                     let b = state.pop()?.into_integer(&self.config, &state)?;
                     state.pushi(a + b);
                 }
-                Command::Minus => {
+                Command::Sub => {
                     let a = state.pop()?.into_integer(&self.config, &state)?;
                     let b = state.pop()?.into_integer(&self.config, &state)?;
                     state.pushi(b - a);
@@ -561,7 +561,7 @@ mod tests {
         let program = simple_program![
             Command::IntLiteral(123),
             Command::IntLiteral(321),
-            Command::Plus,
+            Command::Add,
         ];
         let stack = Rc::<RefCell<_>>::default();
         run_simple(program, stack.clone());
@@ -595,7 +595,7 @@ mod tests {
                         Command::Exec,
                     ],
                 ),
-                (1, simple_lambda![Command::IntLiteral(321), Command::Plus]),
+                (1, simple_lambda![Command::IntLiteral(321), Command::Add]),
             ]),
         };
         let stack = Rc::<RefCell<_>>::default();
@@ -663,7 +663,7 @@ mod tests {
                         Command::Var('a'),
                         Command::Store,
                         Command::IntLiteral(1),
-                        Command::Minus
+                        Command::Sub
                     ],
                 ),
             ]),
@@ -815,7 +815,7 @@ mod tests {
                         Command::Var('b'),
                         Command::Store,
                         Command::WriteInt,
-                        Command::Plus,
+                        Command::Add,
                         Command::StringLiteral(Cow::Borrowed("\n")),
                         Command::Var('a'),
                         Command::Load,
@@ -866,7 +866,7 @@ mod tests {
                         Command::Dup,
                         Command::CharLiteral('0'),
                         Command::IntLiteral(1),
-                        Command::Minus,
+                        Command::Sub,
                         Command::Gt,
                         Command::Swap,
                         Command::CharLiteral('9'),
@@ -883,11 +883,11 @@ mod tests {
                     4,
                     simple_lambda![
                         Command::CharLiteral('0'),
-                        Command::Minus,
+                        Command::Sub,
                         Command::Swap,
                         Command::IntLiteral(10),
                         Command::Mul,
-                        Command::Plus,
+                        Command::Add,
                         Command::Dup,
                     ],
                 ),

@@ -108,9 +108,9 @@ pub enum Command<'source> {
     Pick,
 
     /// **+**
-    Plus,
+    Add,
     /// **-**
-    Minus,
+    Sub,
     /// *****
     Mul,
     /// **/**
