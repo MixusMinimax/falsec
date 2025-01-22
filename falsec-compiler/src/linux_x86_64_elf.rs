@@ -1,5 +1,5 @@
 use crate::error::CompilerError;
-use falsec_types::source::{Command, Program};
+use falsec_types::source::{Command, LambdaCommand, Program};
 use falsec_types::{Config, TypeSafety};
 use std::borrow::Cow;
 use std::collections::HashMap;
@@ -19,10 +19,10 @@ pub fn compile<Output: Write>(
     asm.add_instructions(
         SectionId::Text,
         [
-            Instruction::Global(Label::Named(Cow::Borrowed("_start"))),
-            Instruction::Global(Label::Named(Cow::Borrowed("main"))),
-            Instruction::Label(Label::Named(Cow::Borrowed("_start"))),
-            Instruction::Label(Label::Named(Cow::Borrowed("main"))),
+            Instruction::Global(Label::Named("_start")),
+            Instruction::Global(Label::Named("main")),
+            Instruction::Label(Label::Named("_start")),
+            Instruction::Label(Label::Named("main")),
         ],
     );
     asm.call(Label::Lambda(program.main_id)).exit(0);
@@ -208,9 +208,54 @@ pub fn compile<Output: Write>(
                     .movzx(Register::RAX, Register::AL)
                     .neg(Register::RAX)
                     .replace(Register::RAX, ValueType::Number),
+                Command::Lambda(LambdaCommand::LambdaDefinition(..)) => {
+                    return Err(CompilerError::lambda_definition_not_allowed(span.start))
+                }
+                Command::Lambda(LambdaCommand::LambdaReference(id)) => asm
+                    .lea(Register::RAX, Label::Lambda(id))
+                    .push(Register::RAX, ValueType::Lambda),
+                Command::Exec => asm
+                    .pop(Register::RAX, ValueType::Lambda)
+                    .call(Register::RAX),
+                Command::Conditional => {
+                    let label = asm.label_generator.next().unwrap();
+                    asm.pop(Register::RAX, ValueType::Lambda) // body
+                        .pop(Register::RDX, ValueType::Number) // condition
+                        .test(Register::RDX, Register::RDX)
+                        .jz(label)
+                        .call(Register::RAX)
+                        .label(label)
+                        .ins(Instruction::Nop)
+                }
+                Command::While => {
+                    let start = asm.label_generator.next().unwrap();
+                    let end = asm.label_generator.next().unwrap();
+                    asm.pop(Register::RAX, ValueType::Lambda) // body
+                        .pop(Register::RDX, ValueType::Lambda) // condition
+                        .cpush(Register::RAX)
+                        .cpush(Register::RDX)
+                        .label(start)
+                        .call(Register::RDX)
+                        .pop(Register::RAX, ValueType::Number) // condition result
+                        .test(Register::RAX, Register::RAX)
+                        .jz(end)
+                        .mov(Register::RAX, Address::ba(Register::RSP, 8))
+                        .call(Register::RAX) // call body
+                        .mov(Register::RDX, Address::b(Register::RSP))
+                        .jmp(start)
+                        .label(end)
+                        .add(Register::RSP, 16)
+                }
+                Command::Var(c) => {
+                    if !c.is_ascii_lowercase() {
+                        return Err(CompilerError::invalid_variable_name(span.start, c));
+                    }
+                    asm.push((c as u8 - b'a') as u64, ValueType::Variable)
+                }
                 _ => todo!(),
             };
         }
+        asm.ins(Instruction::Ret);
     }
     write_assembly(asm, output)?;
     Ok(())
@@ -299,8 +344,9 @@ impl Iterator for LabelGenerator {
 /// ```
 #[macro_export]
 macro_rules! binop_fun {
-    ($(fn $fun:ident -> $op:ident$(;)*)*) => {
+    ($($(#[$attr:meta])* fn $fun:ident -> $op:ident$(;)*)*) => {
         $(
+            $(#[$attr])*
             fn $fun(
                 &mut self,
                 dst: impl Into<Operand<'source>>,
@@ -320,8 +366,9 @@ macro_rules! binop_fun {
 /// ```
 #[macro_export]
 macro_rules! unop_fun {
-    ($(fn $fun:ident -> $op:ident$(;)*)*) => {
+    ($($(#[$attr:meta])* fn $fun:ident -> $op:ident$(;)*)*) => {
         $(
+            $(#[$attr])*
             fn $fun(
                 &mut self,
                 operand: impl Into<Operand<'source>>,
@@ -352,14 +399,6 @@ impl<'source> Assembly<'source> {
         self.add_instructions(SectionId::Text, [instruction])
     }
 
-    fn call(&mut self, label: impl Into<Label<'source>>) -> &mut Self {
-        self.ins(Instruction::Call(label.into()))
-    }
-
-    fn je(&mut self, label: impl Into<Label<'source>>) -> &mut Self {
-        self.ins(Instruction::Je(label.into()))
-    }
-
     fn label(&mut self, label: impl Into<Label<'source>>) -> &mut Self {
         self.ins(Instruction::Label(label.into()))
     }
@@ -377,43 +416,57 @@ impl<'source> Assembly<'source> {
         fn mul -> Mul;
         fn or -> Or;
         fn sub -> Sub;
+        fn test -> Test;
         fn xor -> Xor;
     }
 
     unop_fun! {
+        fn call -> Call;
         fn dec -> Dec;
         fn idiv -> IDiv;
         fn inc -> Inc;
+        fn je -> Je;
+        fn jmp -> Jmp;
+        fn jz -> Jz;
         fn neg -> Neg;
         fn not -> Not;
         fn sete -> SetE;
         fn setg -> SetG;
+
+        /// pop from call stack. not to be confused with the data stack.
+        fn cpop -> Pop;
+        /// push to call stack. not to be confused with the data stack.
+        fn cpush -> Push;
     }
 }
 
 fn label_expected_type(value_type: ValueType) -> Label<'static> {
-    Label::Named(Cow::Borrowed(match value_type {
+    Label::Named(match value_type {
         ValueType::Number => "err_msg_expected_number",
         ValueType::Variable => "err_msg_expected_variable",
         ValueType::Lambda => "err_msg_expected_lambda",
-    }))
+    })
 }
 
 fn label_expected_type_len(value_type: ValueType) -> Label<'static> {
-    Label::Named(Cow::Borrowed(match value_type {
+    Label::Named(match value_type {
         ValueType::Number => "err_msg_expected_number_len",
         ValueType::Variable => "err_msg_expected_variable_len",
         ValueType::Lambda => "err_msg_expected_lambda_len",
-    }))
+    })
 }
 
 impl<'source> Assembly<'source> {
-    fn push(&mut self, register: Register, value_type: impl Into<ValueTypeSelector>) -> &mut Self {
+    fn push(
+        &mut self,
+        value: impl Into<Operand<'source>>,
+        value_type: impl Into<ValueTypeSelector>,
+    ) -> &mut Self {
         let value_type = value_type.into();
         assert_ne!(value_type, ValueTypeSelector::Any);
         self.mov(
             Address::bis(Register::STACK_BASE, Register::STACK_COUNTER, 8),
-            register,
+            value.into(),
         );
         if self.config.type_safety != TypeSafety::None {
             if let ValueTypeSelector::ValueType(value_type) = value_type {
@@ -505,7 +558,7 @@ impl<'source> Assembly<'source> {
         };
         let label = self.label_generator.next().unwrap();
         self.cmp(Register::CUR_TYPE, value_type.into_id())
-            .je(label.clone())
+            .je(label)
             .mov(Register::RDI, 2) // stderr
             .lea(Register::RSI, label_expected_type(value_type))
             .mov(Register::RDX, label_expected_type_len(value_type))
@@ -530,7 +583,7 @@ enum Instruction<'source> {
         Operand<'source>,
     ),
     And(Operand<'source>, Operand<'source>),
-    Call(Label<'source>),
+    Call(Operand<'source>),
     CMovE(
         /// Destination
         Operand<'source>,
@@ -553,8 +606,9 @@ enum Instruction<'source> {
     Global(Label<'source>),
     IDiv(Operand<'source>),
     Inc(Operand<'source>),
-    Je(Label<'source>),
-    Jmp(Label<'source>),
+    Je(Operand<'source>),
+    Jz(Operand<'source>),
+    Jmp(Operand<'source>),
     Label(Label<'source>),
     Lea(
         /// Destination
@@ -581,8 +635,14 @@ enum Instruction<'source> {
         Operand<'source>,
     ),
     Neg(Operand<'source>),
+    Nop,
     Not(Operand<'source>),
     Or(Operand<'source>, Operand<'source>),
+    /// pop from call stack. not to be confused with the data stack.
+    Pop(Operand<'source>),
+    /// push to call stack. not to be confused with the data stack.
+    Push(Operand<'source>),
+    Ret,
     SetE(Operand<'source>),
     SetG(Operand<'source>),
     Sub(
@@ -592,6 +652,7 @@ enum Instruction<'source> {
         Operand<'source>,
     ),
     Syscall,
+    Test(Operand<'source>, Operand<'source>),
     Xor(
         /// Destination
         Operand<'source>,
@@ -608,7 +669,7 @@ enum Operand<'source> {
     Address(Address),
 }
 
-#[derive(Clone, Debug)]
+#[derive(Copy, Clone, Debug)]
 enum Label<'source> {
     Lambda(u64),
     Local(u64),
@@ -616,7 +677,7 @@ enum Label<'source> {
     PrintString,
     PrintChar,
     FlushStdout,
-    Named(Cow<'source, str>),
+    Named(&'source str),
 }
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug, Default)]
@@ -630,6 +691,23 @@ struct Address {
 }
 
 impl Address {
+    /// `[base]`
+    fn b(base: Register) -> Self {
+        Self {
+            base,
+            ..Default::default()
+        }
+    }
+
+    /// `[base+address_offset]`
+    fn ba(base: Register, address_offset: i64) -> Self {
+        Self {
+            base,
+            address_offset,
+            ..Default::default()
+        }
+    }
+
     /// `[base+index]`
     fn bi(base: Register, index: Register) -> Self {
         Self {
@@ -869,9 +947,9 @@ impl fmt::Display for Address {
             } else {
                 write!(f, "{}", index)?;
             }
-        }
-        if self.stride > 1 {
-            write!(f, "*{}", self.stride)?;
+            if self.stride > 1 {
+                write!(f, "*{}", self.stride)?;
+            }
         }
         if self.address_offset != 0 {
             write!(f, "+{}", self.address_offset)?;
@@ -951,20 +1029,26 @@ fn write_assembly(assembly: Assembly, mut output: impl Write) -> Result<(), Comp
                 Instruction::Global(symbol) => write!(current_line, "\tglobal {}", symbol)?,
                 Instruction::IDiv(operand) => write!(current_line, "\tidiv {}", operand)?,
                 Instruction::Inc(operand) => write!(current_line, "\tinc {}", operand)?,
-                Instruction::Je(label) => write!(current_line, "\tje [rel {}]", label)?,
-                Instruction::Jmp(label) => write!(current_line, "\tjmp [rel {}]", label)?,
+                Instruction::Je(operand) => write!(current_line, "\tje {}", operand)?,
+                Instruction::Jz(operand) => write!(current_line, "\tjz {}", operand)?,
+                Instruction::Jmp(operand) => write!(current_line, "\tjmp {}", operand)?,
                 Instruction::Label(label) => write!(current_line, "{}:", label)?,
                 Instruction::Lea(dst, src) => write!(current_line, "\tlea {}, {}", dst, src)?,
                 Instruction::Mov(dst, src) => write!(current_line, "\tmov {}, {}", dst, src)?,
                 Instruction::MovZX(dst, src) => write!(current_line, "\tmovzx {}, {}", dst, src)?,
                 Instruction::Mul(dst, src) => write!(current_line, "\tmul {}, {}", dst, src)?,
                 Instruction::Neg(operand) => write!(current_line, "\tneg {}", operand)?,
+                Instruction::Nop => write!(current_line, "\tnop")?,
                 Instruction::Not(operand) => write!(current_line, "\tnot {}", operand)?,
+                Instruction::Pop(operand) => write!(current_line, "\tpop {}", operand)?,
+                Instruction::Push(operand) => write!(current_line, "\tpush {}", operand)?,
                 Instruction::Or(a, b) => write!(current_line, "\tor {}, {}", a, b)?,
+                Instruction::Ret => write!(current_line, "\tret")?,
                 Instruction::SetE(operand) => write!(current_line, "\tsete {}", operand)?,
                 Instruction::SetG(operand) => write!(current_line, "\tsetg {}", operand)?,
                 Instruction::Sub(dst, src) => write!(current_line, "\tsub {}, {}", dst, src)?,
                 Instruction::Syscall => write!(current_line, "\tsyscall")?,
+                Instruction::Test(a, b) => write!(current_line, "\ttest {}, {}", a, b)?,
                 Instruction::Xor(dst, src) => write!(current_line, "\txor {}, {}", dst, src)?,
             }
         }

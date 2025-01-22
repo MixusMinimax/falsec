@@ -13,6 +13,8 @@ pub struct CompilerError {
 #[derive(Clone, Debug)]
 pub enum CompilerErrorKind {
     IO(Rc<io::Error>),
+    LambdaDefinitionNotAllowed,
+    InvalidVariableName(char),
 }
 
 impl Error for CompilerError {}
@@ -29,7 +31,15 @@ impl fmt::Display for CompilerError {
 
 impl fmt::Display for CompilerErrorKind {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        write!(f, "...")
+        match self {
+            CompilerErrorKind::IO(e) => write!(f, "I/O error: {}", e),
+            CompilerErrorKind::LambdaDefinitionNotAllowed => {
+                write!(f, "Lambda definition not allowed")
+            }
+            CompilerErrorKind::InvalidVariableName(c) => {
+                write!(f, "Invalid variable name: '{}'", c)
+            }
+        }
     }
 }
 
@@ -38,6 +48,29 @@ impl From<io::Error> for CompilerError {
         Self {
             source_location: None,
             kind: CompilerErrorKind::IO(Rc::new(err)),
+        }
+    }
+}
+
+impl CompilerError {
+    pub fn io(err: io::Error) -> Self {
+        Self {
+            source_location: None,
+            kind: CompilerErrorKind::IO(Rc::new(err)),
+        }
+    }
+
+    pub fn lambda_definition_not_allowed(source_location: Pos) -> Self {
+        Self {
+            source_location: Some(source_location),
+            kind: CompilerErrorKind::LambdaDefinitionNotAllowed,
+        }
+    }
+
+    pub fn invalid_variable_name(source_location: Pos, c: char) -> Self {
+        Self {
+            source_location: Some(source_location),
+            kind: CompilerErrorKind::InvalidVariableName(c),
         }
     }
 }
