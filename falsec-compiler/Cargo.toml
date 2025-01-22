@@ -5,6 +5,7 @@ edition = "2021"
 
 [dependencies]
 falsec-types = { path = "../falsec-types" }
+falsec-util = { path = "../falsec-util" }
 regex = "1.11"
 lazy_static = "1.5.0"
 tempfile = "3.15.0"

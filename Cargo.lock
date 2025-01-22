@@ -140,6 +140,7 @@ name = "falsec-analyzer"
 version = "0.1.0"
 dependencies = [
  "falsec-types",
+ "falsec-util",
 ]
 
 [[package]]
@@ -147,6 +148,7 @@ name = "falsec-compiler"
 version = "0.1.0"
 dependencies = [
  "falsec-types",
+ "falsec-util",
  "lazy_static",
  "regex",
  "tempfile",
@@ -175,6 +177,10 @@ dependencies = [
  "serde",
  "serde_json",
 ]
+
+[[package]]
+name = "falsec-util"
+version = "0.1.0"
 
 [[package]]
 name = "fastrand"

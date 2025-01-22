@@ -57,6 +57,7 @@ mod tests {
         let program = Program {
             main_id: 0,
             lambdas: HashMap::from([(0, Vec::new())]),
+            ..Default::default()
         };
         let mut output = Vec::<u8>::new();
         compile(CompileRequest {

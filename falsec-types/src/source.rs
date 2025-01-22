@@ -87,6 +87,8 @@ pub struct Program<'source> {
     pub main_id: u64,
     /// all lambdas defined in the program
     pub lambdas: HashMap<u64, Lambda<'source>>,
+    /// all string literals defined in the program
+    pub strings: HashMap<u64, Cow<'source, str>>,
 }
 
 #[derive(Clone, Eq, PartialEq, Debug)]

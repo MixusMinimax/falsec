@@ -1,6 +1,8 @@
 use crate::error::AnalyzerError;
-use falsec_types::Config;
 use falsec_types::source::{Command, Lambda, LambdaCommand, Program, Span};
+use falsec_types::Config;
+use falsec_util::string_id;
+use std::borrow::Cow;
 use std::collections::HashMap;
 
 pub mod error;
@@ -17,9 +19,14 @@ impl<'source> Analyzer<'source> {
     }
 
     pub fn analyze(self) -> Result<Program<'source>, AnalyzerError> {
+        let lambdas = Self::extract_lambdas(self.program, HashMap::new(), 0)?;
+        let strings = lambdas
+            .values()
+            .try_fold(Default::default(), Self::extract_strings)?;
         Ok(Program {
             main_id: 0,
-            lambdas: Self::extract_lambdas(self.program, HashMap::new(), 0)?,
+            lambdas,
+            strings,
         })
         // todo: code optimization, dead code elimination, etc.
     }
@@ -51,6 +58,18 @@ impl<'source> Analyzer<'source> {
         }
         lambdas.insert(id, lambda);
         Ok(lambdas)
+    }
+
+    fn extract_strings(
+        mut strings: HashMap<u64, Cow<'source, str>>,
+        lambda: &Lambda<'source>,
+    ) -> Result<HashMap<u64, Cow<'source, str>>, AnalyzerError> {
+        for (command, _) in lambda {
+            if let Command::StringLiteral(s) = command {
+                strings.entry(string_id(s)).or_insert_with(|| s.clone());
+            }
+        }
+        Ok(strings)
     }
 }
 

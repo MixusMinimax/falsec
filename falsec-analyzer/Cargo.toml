@@ -5,3 +5,4 @@ edition = "2021"
 
 [dependencies]
 falsec-types = { path = "../falsec-types" }
+falsec-util = { path = "../falsec-util" }

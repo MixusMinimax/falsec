@@ -1,6 +1,9 @@
+mod boilerplate;
+
 use crate::error::CompilerError;
 use falsec_types::source::{Command, LambdaCommand, Program};
 use falsec_types::{Config, TypeSafety};
+use falsec_util::string_id;
 use std::borrow::Cow;
 use std::collections::HashMap;
 use std::fmt;
@@ -16,6 +19,16 @@ pub fn compile<Output: Write>(
         config: config.clone(),
         ..Default::default()
     };
+
+    boilerplate::write_bss(&mut asm, &config);
+
+    asm.add_instructions(
+        SectionId::Data,
+        [Instruction::Label(Label::Named("stdout_len"))],
+    );
+
+    boilerplate::write_error_messages(&mut asm, program.strings, &config);
+
     asm.add_instructions(
         SectionId::Text,
         [
@@ -38,10 +51,10 @@ pub fn compile<Output: Write>(
             }
             match command {
                 Command::IntLiteral(i) => asm
-                    .mov(Register::RAX, Operand::Immediate(i))
+                    .mov(Register::RAX, i)
                     .push(Register::RAX, ValueType::Number),
                 Command::CharLiteral(c) => asm
-                    .mov(Register::RAX, Operand::Immediate(c as u64))
+                    .mov(Register::RAX, c as u64)
                     .push(Register::RAX, ValueType::Number),
                 Command::Dup => asm
                     .peek_any(Register::RAX)
@@ -252,7 +265,74 @@ pub fn compile<Output: Write>(
                     }
                     asm.push((c as u8 - b'a') as u64, ValueType::Variable)
                 }
-                _ => todo!(),
+                Command::Store => {
+                    asm.pop(Register::RAX, ValueType::Variable)
+                        .pop_any(Register::RDX)
+                        .and(Register::RAX, 0b11111)
+                        .lea(Register::RBX, Label::Variables)
+                        .mov(Address::bis(Register::RBX, Register::RAX, 8), Register::RDX);
+                    if config.type_safety != TypeSafety::None {
+                        asm.lea(Register::RBX, Label::VariableTypes).mov(
+                            Address::bi(Register::RBX, Register::RAX),
+                            Register::CUR_TYPE,
+                        );
+                    }
+                    &mut asm
+                }
+                Command::Load => {
+                    asm.peek(Register::RAX, ValueType::Variable)
+                        .and(Register::RAX, 0b11111)
+                        .lea(Register::RBX, Label::Variables)
+                        .mov(Register::RDX, Address::bis(Register::RBX, Register::RAX, 8));
+                    if config.type_safety != TypeSafety::None {
+                        asm.lea(Register::RBX, Label::VariableTypes).mov(
+                            Register::CUR_TYPE,
+                            Address::bi(Register::RBX, Register::RAX),
+                        );
+                    }
+                    asm.replace(Register::RDX, ValueTypeSelector::Current)
+                }
+                Command::ReadChar => {
+                    asm.xor(Register::RAX, Register::RAX) // sys_read
+                        .xor(Register::RDI, Register::RDI) // stdin
+                        .lea(
+                            Register::RSI,
+                            Address::bis(Register::STACK_BASE, Register::STACK_COUNTER, 8),
+                        ) // buffer
+                        .mov(Register::RDX, 1) // size
+                        .ins(Instruction::Syscall);
+                    if config.type_safety != TypeSafety::None {
+                        asm.mov(Register::CUR_TYPE, ValueType::Number.into_id());
+                        asm.mov(
+                            Address::bi(Register::TYPE_STACK_BASE, Register::STACK_COUNTER),
+                            Register::CUR_TYPE,
+                        );
+                    }
+                    let label = asm.label_generator.next().unwrap();
+                    asm.test(Register::RAX, Register::RAX)
+                        .jnz(label)
+                        .mov(
+                            Address::bis(Register::STACK_BASE, Register::STACK_COUNTER, 8),
+                            -1,
+                        )
+                        .label(label)
+                        .inc(Register::STACK_COUNTER)
+                }
+                Command::WriteChar => asm
+                    .pop(Register::RDI, ValueType::Number)
+                    .call(Label::PrintChar),
+                Command::StringLiteral(string) => {
+                    let id = string_id(&string);
+                    asm.mov(Register::RDI, 1) // stdout
+                        .lea(Register::RSI, Label::StringLiteral(id))
+                        .mov(Register::RDX, Label::StringLiteralLen(id))
+                        .call(Label::PrintString)
+                }
+                Command::WriteInt => asm
+                    .pop(Register::RDI, ValueType::Number)
+                    .call(Label::PrintDecimal),
+                Command::Flush => asm.call(Label::FlushStdout),
+                Command::Comment(_) => &mut asm,
             };
         }
         asm.ins(Instruction::Ret);
@@ -266,6 +346,16 @@ enum ValueType {
     Number,
     Variable,
     Lambda,
+}
+
+impl fmt::Display for ValueType {
+    fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self {
+            ValueType::Number => write!(f, "number"),
+            ValueType::Variable => write!(f, "variable"),
+            ValueType::Lambda => write!(f, "lambda"),
+        }
+    }
 }
 
 #[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug, Default)]
@@ -427,6 +517,7 @@ impl<'source> Assembly<'source> {
         fn inc -> Inc;
         fn je -> Je;
         fn jmp -> Jmp;
+        fn jnz -> Jnz;
         fn jz -> Jz;
         fn neg -> Neg;
         fn not -> Not;
@@ -470,7 +561,7 @@ impl<'source> Assembly<'source> {
         );
         if self.config.type_safety != TypeSafety::None {
             if let ValueTypeSelector::ValueType(value_type) = value_type {
-                self.mov(Register::CUR_TYPE, Operand::Immediate(value_type.into_id()));
+                self.mov(Register::CUR_TYPE, value_type.into_id());
             }
             self.mov(
                 Address::bi(Register::TYPE_STACK_BASE, Register::STACK_COUNTER),
@@ -601,12 +692,14 @@ enum Instruction<'source> {
     CommentEndOfLine(Cow<'source, str>),
     Cqo,
     DB(Cow<'source, [u8]>),
+    DW(i64),
     Dec(Operand<'source>),
     Equ(Cow<'source, str>),
     Global(Label<'source>),
     IDiv(Operand<'source>),
     Inc(Operand<'source>),
     Je(Operand<'source>),
+    Jnz(Operand<'source>),
     Jz(Operand<'source>),
     Jmp(Operand<'source>),
     Label(Label<'source>),
@@ -659,12 +752,13 @@ enum Instruction<'source> {
         /// Source
         Operand<'source>,
     ),
+    Reserve(RegisterSize, u64),
 }
 
 #[derive(Clone, Debug)]
 enum Operand<'source> {
     Register(Register),
-    Immediate(u64),
+    Immediate(i64),
     Label(Label<'source>),
     Address(Address),
 }
@@ -674,9 +768,18 @@ enum Label<'source> {
     Lambda(u64),
     Local(u64),
     PrintDecimal,
+    /// `void print_string(int fd, const void *buf, size_t count);`
+    /// if fd is 1, writes to stout_buffer, if the string is shorter than the buffer size.
+    /// if it does, and the remaining space in the buffer is less than the string length,
+    /// the buffer is flushed to stdout.
+    /// if fd is 2, writes to stderr directly. The stdout buffer is not affected.
     PrintString,
     PrintChar,
     FlushStdout,
+    StringLiteral(u64),
+    StringLiteralLen(u64),
+    Variables,
+    VariableTypes,
     Named(&'source str),
 }
 
@@ -755,9 +858,21 @@ impl From<Register> for Operand<'_> {
     }
 }
 
+impl From<i32> for Operand<'_> {
+    fn from(value: i32) -> Self {
+        Operand::Immediate(value as i64)
+    }
+}
+
+impl From<i64> for Operand<'_> {
+    fn from(value: i64) -> Self {
+        Operand::Immediate(value)
+    }
+}
+
 impl From<u64> for Operand<'_> {
     fn from(value: u64) -> Self {
-        Operand::Immediate(value)
+        Operand::Immediate(value as i64)
     }
 }
 
@@ -879,13 +994,17 @@ impl fmt::Display for Operand<'_> {
 
 impl fmt::Display for Label<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
-        match self {
-            Label::Lambda(id) => write!(f, "_lambda_{}", id),
+        match *self {
+            Label::Lambda(id) => write!(f, "_lambda_{:03}", id),
             Label::Local(id) => write!(f, "_local_{:03}", id),
             Label::PrintDecimal => write!(f, "print_decimal"),
             Label::PrintString => write!(f, "print_string"),
             Label::PrintChar => write!(f, "print_char"),
             Label::FlushStdout => write!(f, "flush_stdout"),
+            Label::StringLiteral(id) => write!(f, "_string_{:03}", id),
+            Label::StringLiteralLen(id) => write!(f, "_string_{:03}_len", id),
+            Label::Variables => write!(f, "variables"),
+            Label::VariableTypes => write!(f, "variable_types"),
             Label::Named(name) => write!(f, "{}", name),
         }
     }
@@ -971,7 +1090,10 @@ fn write_assembly(assembly: Assembly, mut output: impl Write) -> Result<(), Comp
             if !current_line.is_empty()
                 && match instruction {
                     Instruction::CommentEndOfLine(..) => false,
-                    Instruction::DB(..) | Instruction::Equ(..)
+                    Instruction::DB(_)
+                    | Instruction::DW(_)
+                    | Instruction::Equ(_)
+                    | Instruction::Reserve(..)
                         if previous_instruction_was_label && current_line.len() < 8 =>
                     {
                         false
@@ -1024,14 +1146,16 @@ fn write_assembly(assembly: Assembly, mut output: impl Write) -> Result<(), Comp
                         write!(current_line, "\"")?;
                     }
                 }
+                Instruction::DW(i) => write!(current_line, "\tDW {}", i)?,
                 Instruction::Dec(operand) => write!(current_line, "\tdec {}", operand)?,
                 Instruction::Equ(expr) => write!(current_line, "\tequ {}", expr)?,
                 Instruction::Global(symbol) => write!(current_line, "\tglobal {}", symbol)?,
                 Instruction::IDiv(operand) => write!(current_line, "\tidiv {}", operand)?,
                 Instruction::Inc(operand) => write!(current_line, "\tinc {}", operand)?,
                 Instruction::Je(operand) => write!(current_line, "\tje {}", operand)?,
-                Instruction::Jz(operand) => write!(current_line, "\tjz {}", operand)?,
                 Instruction::Jmp(operand) => write!(current_line, "\tjmp {}", operand)?,
+                Instruction::Jnz(operand) => write!(current_line, "\tjnz {}", operand)?,
+                Instruction::Jz(operand) => write!(current_line, "\tjz {}", operand)?,
                 Instruction::Label(label) => write!(current_line, "{}:", label)?,
                 Instruction::Lea(dst, src) => write!(current_line, "\tlea {}, {}", dst, src)?,
                 Instruction::Mov(dst, src) => write!(current_line, "\tmov {}, {}", dst, src)?,
@@ -1050,6 +1174,13 @@ fn write_assembly(assembly: Assembly, mut output: impl Write) -> Result<(), Comp
                 Instruction::Syscall => write!(current_line, "\tsyscall")?,
                 Instruction::Test(a, b) => write!(current_line, "\ttest {}, {}", a, b)?,
                 Instruction::Xor(dst, src) => write!(current_line, "\txor {}, {}", dst, src)?,
+                Instruction::Reserve(size, count) => match size {
+                    RegisterSize::L => write!(current_line, "\tresb {}", count)?,
+                    RegisterSize::H => panic!("Cannot reserve high byte"),
+                    RegisterSize::W => write!(current_line, "\tresw {}", count)?,
+                    RegisterSize::E => write!(current_line, "\tresd {}", count)?,
+                    RegisterSize::R => write!(current_line, "\tresq {}", count)?,
+                },
             }
         }
         if !current_line.is_empty() {

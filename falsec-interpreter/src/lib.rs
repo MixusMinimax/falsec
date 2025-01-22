@@ -520,6 +520,7 @@ mod tests {
                     0,
                     simple_lambda!($($command),*),
                 )]),
+                ..Default::default()
             }
         };
     }
@@ -529,6 +530,7 @@ mod tests {
         let program = Program {
             main_id: 0,
             lambdas: HashMap::from([(0, Vec::new())]),
+            ..Default::default()
         };
         let stack = Rc::<RefCell<_>>::default();
         run_simple(program, stack.clone());
@@ -550,6 +552,7 @@ mod tests {
                     },
                 )],
             )]),
+            ..Default::default()
         };
         let stack = Rc::<RefCell<_>>::default();
         run_simple(program, stack.clone());
@@ -597,6 +600,7 @@ mod tests {
                 ),
                 (1, simple_lambda![Command::IntLiteral(321), Command::Add]),
             ]),
+            ..Default::default()
         };
         let stack = Rc::<RefCell<_>>::default();
         run_simple(program, stack.clone());
@@ -617,6 +621,7 @@ mod tests {
                 ),
                 (1, simple_lambda![Command::IntLiteral(123)]),
             ]),
+            ..Default::default()
         };
         let stack_false = Rc::new(RefCell::new(vec![StackValue::Integer(0)]));
         run_simple(program.clone(), stack_false.clone());
@@ -667,6 +672,7 @@ mod tests {
                     ],
                 ),
             ]),
+            ..Default::default()
         };
         let stack0 = Rc::new(RefCell::new(vec![StackValue::Integer(0)]));
         let stack1 = Rc::new(RefCell::new(vec![StackValue::Integer(1)]));
@@ -892,6 +898,7 @@ mod tests {
                     ],
                 ),
             ]),
+            ..Default::default()
         };
         let stack = Rc::<RefCell<_>>::default();
         let input = b"123\n321\n";

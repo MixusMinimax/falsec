@@ -10,14 +10,21 @@ pub mod source;
 pub struct Config {
     #[cfg_attr(feature = "serde", serde(default))]
     pub tab_width: TabWidth,
+
     #[cfg_attr(feature = "serde", serde(default))]
     pub balance_comments: bool,
+
     #[cfg_attr(feature = "serde", serde(default))]
     pub string_escape_sequences: bool,
+
     #[cfg_attr(feature = "serde", serde(default))]
     pub type_safety: TypeSafety,
+
     #[cfg_attr(feature = "serde", serde(default))]
     pub write_command_comments: bool,
+
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub stdout_buffer_size: StdoutBufferSize,
 }
 
 #[derive(Copy, Clone, PartialOrd, Ord, PartialEq, Eq, Debug, Default)]
@@ -109,5 +116,16 @@ mod tab_width {
         fn mul(self, rhs: TabWidth) -> Self::Output {
             self * rhs.0
         }
+    }
+}
+
+#[derive(Copy, Clone, PartialEq, Eq, Debug)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
+#[cfg_attr(feature = "schema", derive(schemars::JsonSchema))]
+pub struct StdoutBufferSize(pub u64);
+
+impl Default for StdoutBufferSize {
+    fn default() -> Self {
+        Self(8192)
     }
 }
