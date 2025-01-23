@@ -27,7 +27,7 @@ pub fn compile<Output: Write>(
             .write_error_messages(program.strings)
             .write_print_string(&config)
             .write_flush_stdout()
-            .write_print_decimal();
+            .write_print_decimal(&config);
     }
 
     asm.add_instructions(

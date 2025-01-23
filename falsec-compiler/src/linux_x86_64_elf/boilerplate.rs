@@ -15,7 +15,7 @@ pub(super) trait Boilerplate<'source> {
 
     fn write_flush_stdout(&mut self) -> &mut Self;
 
-    fn write_print_decimal(&mut self) -> &mut Self;
+    fn write_print_decimal(&mut self, config: &Config) -> &mut Self;
 }
 
 impl<'source> Boilerplate<'source> for Assembly<'source> {
@@ -152,14 +152,25 @@ impl<'source> Boilerplate<'source> for Assembly<'source> {
             .ins(Instruction::Ret)
     }
 
-    fn write_print_decimal(&mut self) -> &mut Self {
-        // rdi: fd
-        // rsi: num
+    fn write_print_decimal(&mut self, config: &Config) -> &mut Self {
+        // rdi: num
+        // this function only writes to stdout.
+
+        let skip_flush = self.new_label();
+        let return_label = self.new_label();
 
         self.label(Label::PrintDecimal)
             .ins(Instruction::Comment(Cow::Borrowed(
-                "void print_decimal(int fd, int64_t num)",
+                "void print_decimal(int64_t num)",
             )))
+            // we write to the stdout_buffer directly, and we assume to need at most 20 bytes.
+            .mov(Register::RAX, config.stdout_buffer_size.0)
+            .sub(Register::RAX, Label::StdoutLen)
+            .cmp(Register::RAX, 20)
+            .jns(skip_flush)
+            .call(Label::FlushStdout)
+            .label(skip_flush)
+            .label(return_label)
             .ins(Instruction::Ret)
     }
 }
