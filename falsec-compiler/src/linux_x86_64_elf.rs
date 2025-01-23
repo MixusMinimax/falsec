@@ -1,6 +1,7 @@
 mod boilerplate;
 
 use crate::error::CompilerError;
+use crate::linux_x86_64_elf::boilerplate::Boilerplate;
 use falsec_types::source::{Command, LambdaCommand, Program};
 use falsec_types::{Config, TypeSafety};
 use falsec_util::string_id;
@@ -20,14 +21,19 @@ pub fn compile<Output: Write>(
         ..Default::default()
     };
 
-    boilerplate::write_bss(&mut asm, &config);
+    {
+        use crate::linux_x86_64_elf::boilerplate::Boilerplate;
+        asm.write_bss(&config)
+            .write_error_messages(program.strings)
+            .write_print_string(&config)
+            .write_flush_stdout()
+            .write_print_decimal();
+    }
 
     asm.add_instructions(
         SectionId::Data,
-        [Instruction::Label(Label::Named("stdout_len"))],
+        [Instruction::Label(Label::StdoutLen), Instruction::DW(0)],
     );
-
-    boilerplate::write_error_messages(&mut asm, program.strings, &config);
 
     asm.add_instructions(
         SectionId::Text,
@@ -470,6 +476,10 @@ macro_rules! unop_fun {
 }
 
 impl<'source> Assembly<'source> {
+    fn new_label(&mut self) -> Label<'source> {
+        self.label_generator.next().unwrap()
+    }
+
     fn add_instructions(
         &mut self,
         section_id: SectionId,
@@ -496,7 +506,10 @@ impl<'source> Assembly<'source> {
     fn lea(&mut self, dst: Register, src: impl Into<Operand<'source>>) -> &mut Self {
         self.ins(Instruction::Lea(dst, src.into()))
     }
+}
 
+#[allow(dead_code)]
+impl<'source> Assembly<'source> {
     binop_fun! {
         fn add -> Add;
         fn and -> And;
@@ -505,6 +518,8 @@ impl<'source> Assembly<'source> {
         fn movzx -> MovZX;
         fn mul -> Mul;
         fn or -> Or;
+        fn shl -> Shl;
+        fn shr -> Shr;
         fn sub -> Sub;
         fn test -> Test;
         fn xor -> Xor;
@@ -515,16 +530,28 @@ impl<'source> Assembly<'source> {
         fn dec -> Dec;
         fn idiv -> IDiv;
         fn inc -> Inc;
-        fn je -> Je;
+
         fn jmp -> Jmp;
-        fn jnz -> Jnz;
+        /// Jump if equal
+        fn je -> Je;
+        /// Jump if not equal
+        fn jne -> Jne;
+        /// Jump if zero
         fn jz -> Jz;
+        /// Jump if not zero
+        fn jnz -> Jnz;
+        /// Jump if sign
+        fn js -> Js;
+        /// Jump if not sign
+        fn jns -> Jns;
+
         fn neg -> Neg;
         fn not -> Not;
         fn sete -> SetE;
         fn setg -> SetG;
 
         /// pop from call stack. not to be confused with the data stack.
+        #[allow(dead_code)]
         fn cpop -> Pop;
         /// push to call stack. not to be confused with the data stack.
         fn cpush -> Push;
@@ -675,6 +702,7 @@ enum Instruction<'source> {
     ),
     And(Operand<'source>, Operand<'source>),
     Call(Operand<'source>),
+    Cld,
     CMovE(
         /// Destination
         Operand<'source>,
@@ -698,10 +726,21 @@ enum Instruction<'source> {
     Global(Label<'source>),
     IDiv(Operand<'source>),
     Inc(Operand<'source>),
-    Je(Operand<'source>),
-    Jnz(Operand<'source>),
-    Jz(Operand<'source>),
+
     Jmp(Operand<'source>),
+    /// Jump if equal
+    Je(Operand<'source>),
+    /// Jump if not equal
+    Jne(Operand<'source>),
+    /// Jump if zero
+    Jz(Operand<'source>),
+    /// Jump if not zero
+    Jnz(Operand<'source>),
+    /// Jump if sign
+    Js(Operand<'source>),
+    /// Jump if not sign
+    Jns(Operand<'source>),
+
     Label(Label<'source>),
     Lea(
         /// Destination
@@ -738,6 +777,8 @@ enum Instruction<'source> {
     Ret,
     SetE(Operand<'source>),
     SetG(Operand<'source>),
+    Shl(Operand<'source>, Operand<'source>),
+    Shr(Operand<'source>, Operand<'source>),
     Sub(
         /// Destination
         Operand<'source>,
@@ -752,6 +793,8 @@ enum Instruction<'source> {
         /// Source
         Operand<'source>,
     ),
+    RepMovsb,
+    RepMovsq,
     Reserve(RegisterSize, u64),
 }
 
@@ -776,6 +819,9 @@ enum Label<'source> {
     PrintString,
     PrintChar,
     FlushStdout,
+    StdoutBuffer,
+    StdoutLen,
+    DecimalBuffer,
     StringLiteral(u64),
     StringLiteralLen(u64),
     Variables,
@@ -1001,6 +1047,9 @@ impl fmt::Display for Label<'_> {
             Label::PrintString => write!(f, "print_string"),
             Label::PrintChar => write!(f, "print_char"),
             Label::FlushStdout => write!(f, "flush_stdout"),
+            Label::StdoutBuffer => write!(f, "stdout_buffer"),
+            Label::StdoutLen => write!(f, "stdout_len"),
+            Label::DecimalBuffer => write!(f, "decimal_buffer"),
             Label::StringLiteral(id) => write!(f, "_string_{:03}", id),
             Label::StringLiteralLen(id) => write!(f, "_string_{:03}_len", id),
             Label::Variables => write!(f, "variables"),
@@ -1110,6 +1159,7 @@ fn write_assembly(assembly: Assembly, mut output: impl Write) -> Result<(), Comp
                 Instruction::Add(dst, src) => write!(current_line, "\tadd {}, {}", dst, src)?,
                 Instruction::And(dst, src) => write!(current_line, "\tand {}, {}", dst, src)?,
                 Instruction::Call(label) => write!(current_line, "\tcall [rel {}]", label)?,
+                Instruction::Cld => write!(current_line, "\tcld")?,
                 Instruction::CMovE(dst, src) => write!(current_line, "\tcmove {}, {}", dst, src)?,
                 Instruction::CMovL(dst, src) => write!(current_line, "\tcmovl {}, {}", dst, src)?,
                 Instruction::Cmp(a, b) => write!(current_line, "\tcmp {}, {}", a, b)?,
@@ -1152,10 +1202,15 @@ fn write_assembly(assembly: Assembly, mut output: impl Write) -> Result<(), Comp
                 Instruction::Global(symbol) => write!(current_line, "\tglobal {}", symbol)?,
                 Instruction::IDiv(operand) => write!(current_line, "\tidiv {}", operand)?,
                 Instruction::Inc(operand) => write!(current_line, "\tinc {}", operand)?,
-                Instruction::Je(operand) => write!(current_line, "\tje {}", operand)?,
+
                 Instruction::Jmp(operand) => write!(current_line, "\tjmp {}", operand)?,
-                Instruction::Jnz(operand) => write!(current_line, "\tjnz {}", operand)?,
+                Instruction::Je(operand) => write!(current_line, "\tje {}", operand)?,
+                Instruction::Jne(operand) => write!(current_line, "\tjne {}", operand)?,
                 Instruction::Jz(operand) => write!(current_line, "\tjz {}", operand)?,
+                Instruction::Jnz(operand) => write!(current_line, "\tjnz {}", operand)?,
+                Instruction::Js(operand) => write!(current_line, "\tjs {}", operand)?,
+                Instruction::Jns(operand) => write!(current_line, "\tjns {}", operand)?,
+
                 Instruction::Label(label) => write!(current_line, "{}:", label)?,
                 Instruction::Lea(dst, src) => write!(current_line, "\tlea {}, {}", dst, src)?,
                 Instruction::Mov(dst, src) => write!(current_line, "\tmov {}, {}", dst, src)?,
@@ -1170,10 +1225,14 @@ fn write_assembly(assembly: Assembly, mut output: impl Write) -> Result<(), Comp
                 Instruction::Ret => write!(current_line, "\tret")?,
                 Instruction::SetE(operand) => write!(current_line, "\tsete {}", operand)?,
                 Instruction::SetG(operand) => write!(current_line, "\tsetg {}", operand)?,
+                Instruction::Shl(dst, src) => write!(current_line, "\tshl {}, {}", dst, src)?,
+                Instruction::Shr(dst, src) => write!(current_line, "\tshr {}, {}", dst, src)?,
                 Instruction::Sub(dst, src) => write!(current_line, "\tsub {}, {}", dst, src)?,
                 Instruction::Syscall => write!(current_line, "\tsyscall")?,
                 Instruction::Test(a, b) => write!(current_line, "\ttest {}, {}", a, b)?,
                 Instruction::Xor(dst, src) => write!(current_line, "\txor {}, {}", dst, src)?,
+                Instruction::RepMovsb => write!(current_line, "\trep movsb")?,
+                Instruction::RepMovsq => write!(current_line, "\trep movsq")?,
                 Instruction::Reserve(size, count) => match size {
                     RegisterSize::L => write!(current_line, "\tresb {}", count)?,
                     RegisterSize::H => panic!("Cannot reserve high byte"),

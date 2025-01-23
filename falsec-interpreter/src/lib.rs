@@ -179,7 +179,7 @@ impl<Input: Read, Output: Write> Interpreter<'_, Input, Output> {
                         state.current_lambda_id,
                         state.program_counter,
                     )),
-                    (Var(c), _) => Ok(c as i64),
+                    (Var(c), _) => Ok((c as u8 - b'a') as i64),
                     (Lambda(_), TypeSafety::Full) => Err(InterpreterError::type_cast_error(
                         "Integer",
                         "Lambda",
@@ -203,7 +203,7 @@ impl<Input: Read, Output: Write> Interpreter<'_, Input, Output> {
                             state.program_counter,
                         ))
                     }
-                    (Integer(i), _) => Ok(i as u8 as char),
+                    (Integer(i), _) => Ok(((i as u8 & 32) + b'a') as char),
                     (Var(c), _) => Ok(c),
                     (Lambda(_), TypeSafety::Full | TypeSafety::LambdaAndVar) => {
                         Err(InterpreterError::type_cast_error(
@@ -214,7 +214,7 @@ impl<Input: Read, Output: Write> Interpreter<'_, Input, Output> {
                             state.program_counter,
                         ))
                     }
-                    (Lambda(id), _) => Ok(id as u8 as char),
+                    (Lambda(id), _) => Ok(((id as u8 & 32) + b'a') as char),
                 }
             }
 
@@ -476,7 +476,7 @@ impl<Input: Read, Output: Write> Interpreter<'_, Input, Output> {
 mod tests {
     use crate::{Interpreter, StackValue};
     use falsec_types::source::LambdaCommand::LambdaReference;
-    use falsec_types::source::{Command, LambdaCommand, Pos, Program, Span};
+    use falsec_types::source::{Command, Pos, Program, Span};
     use std::borrow::Cow;
     use std::cell::RefCell;
     use std::collections::HashMap;
@@ -594,7 +594,7 @@ mod tests {
                     0,
                     simple_lambda![
                         Command::IntLiteral(123),
-                        Command::Lambda(LambdaCommand::LambdaReference(1)),
+                        Command::Lambda(LambdaReference(1)),
                         Command::Exec,
                     ],
                 ),
@@ -614,10 +614,7 @@ mod tests {
             lambdas: HashMap::from([
                 (
                     0,
-                    simple_lambda![
-                        Command::Lambda(LambdaCommand::LambdaReference(1)),
-                        Command::Conditional
-                    ],
+                    simple_lambda![Command::Lambda(LambdaReference(1)), Command::Conditional],
                 ),
                 (1, simple_lambda![Command::IntLiteral(123)]),
             ]),
