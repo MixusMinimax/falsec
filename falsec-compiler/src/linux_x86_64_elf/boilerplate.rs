@@ -1,7 +1,8 @@
-use crate::linux_x86_64_elf::{
-    label_expected_type, label_expected_type_len, Assembly, Instruction, Label, Register,
-    RegisterSize, SectionId, ValueType,
+use crate::linux_x86_64_elf::asm::{
+    Address, Instruction, Label, Register, RegisterSize, SectionId,
 };
+
+use crate::linux_x86_64_elf::{label_expected_type, label_expected_type_len, Assembly, ValueType};
 use falsec_types::Config;
 use std::borrow::Cow;
 use std::collections::HashMap;
@@ -111,7 +112,7 @@ impl<'source> Boilerplate<'source> for Assembly<'source> {
             .label(handle_stdout)
             .mov(Register::RAX, config.stdout_buffer_size.0)
             .sub(Register::RAX, Register::RDX)
-            .cmp(Register::RAX, Label::StdoutLen) // remaining space
+            .cmp(Register::RAX, Address::b(Label::StdoutLen)) // remaining space
             .jns(skip_flush)
             .call(Label::FlushStdout)
             .label(skip_flush)
@@ -120,7 +121,7 @@ impl<'source> Boilerplate<'source> for Assembly<'source> {
             // there is enough space in the stdout_buffer. copy the contents of rsi there.
             // vvv
             .add(Label::StdoutLen, Register::RDX)
-            .lea(Register::RDI, Label::StdoutBuffer)
+            .lea(Register::RDI, Address::b(Label::StdoutBuffer))
             .ins(Instruction::Cld)
             .mov(Register::RCX, Register::RDX)
             .shr(Register::RCX, 3)
@@ -145,10 +146,10 @@ impl<'source> Boilerplate<'source> for Assembly<'source> {
             .ins(Instruction::Comment(Cow::Borrowed("void flush_stdout()")))
             .mov(Register::RAX, 1) // sys_write
             .mov(Register::RDI, 1) // stdout
-            .lea(Register::RSI, Label::StdoutBuffer)
-            .mov(Register::RDX, Label::StdoutLen)
+            .lea(Register::RSI, Address::b(Label::StdoutBuffer))
+            .mov(Register::RDX, Address::b(Label::StdoutLen))
             .ins(Instruction::Syscall)
-            .mov(Label::StdoutLen, 0)
+            .mov(Address::b(Label::StdoutLen), 0)
             .ins(Instruction::Ret)
     }
 
@@ -165,11 +166,12 @@ impl<'source> Boilerplate<'source> for Assembly<'source> {
             )))
             // we write to the stdout_buffer directly, and we assume to need at most 20 bytes.
             .mov(Register::RAX, config.stdout_buffer_size.0)
-            .sub(Register::RAX, Label::StdoutLen)
+            .sub(Register::RAX, Address::b(Label::StdoutLen))
             .cmp(Register::RAX, 20)
             .jns(skip_flush)
             .call(Label::FlushStdout)
             .label(skip_flush)
+            // TODO
             .label(return_label)
             .ins(Instruction::Ret)
     }
