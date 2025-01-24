@@ -2,5 +2,39 @@
 name = "falsec-cli"
 version = "0.1.0"
 edition = "2021"
+default-run = "falsec"
+
+[lib]
+name = "falsec_cli"
+path = "src/lib.rs"
+
+[[bin]]
+name = "falsec"
+path = "src/main.rs"
+required-features = ["runtime"]
+
+[[bin]]
+name = "print-completions"
+path = "src/bin/print_completions.rs"
+required-features = ["completions"]
 
 [dependencies]
+clap = { version = "4.5", features = ["derive"] }
+clap_complete = { version = "4.5", optional = true }
+anstyle = "1.0.10"
+falsec-types = { path = "../falsec-types", optional = true }
+falsec-parser = { path = "../falsec-parser", optional = true }
+falsec-interpreter = { path = "../falsec-interpreter", optional = true }
+falsec-analyzer = { path = "../falsec-analyzer", optional = true }
+falsec-compiler = { path = "../falsec-compiler", optional = true }
+
+[features]
+completions = ["dep:clap_complete"]
+runtime = [
+    "dep:falsec-types",
+    "dep:falsec-parser",
+    "dep:falsec-interpreter",
+    "dep:falsec-analyzer",
+    "dep:falsec-compiler",
+]
+default = ["runtime"]
