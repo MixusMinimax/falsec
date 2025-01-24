@@ -27,6 +27,8 @@ falsec-parser = { path = "../falsec-parser", optional = true }
 falsec-interpreter = { path = "../falsec-interpreter", optional = true }
 falsec-analyzer = { path = "../falsec-analyzer", optional = true }
 falsec-compiler = { path = "../falsec-compiler", optional = true }
+serde = { version = "1.0", optional = true, features = ["derive"] }
+toml = { version = "0.8.19", optional = true }
 
 [features]
 completions = ["dep:clap_complete"]
@@ -36,5 +38,8 @@ runtime = [
     "dep:falsec-interpreter",
     "dep:falsec-analyzer",
     "dep:falsec-compiler",
+    "dep:serde",
+    "dep:toml",
+    "falsec-types/serde"
 ]
 default = ["runtime"]

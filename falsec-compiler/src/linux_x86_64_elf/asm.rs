@@ -1,11 +1,8 @@
-use crate::linux_x86_64_elf::asm::RegisterName::{
-    AX, BP, BX, CX, DI, DX, R10, R11, R12, R13, R14, R15, R8, R9, SI, SP,
-};
-use crate::linux_x86_64_elf::asm::RegisterSize::{E, H, L, R, W};
 use std::borrow::Cow;
 use std::fmt;
 use std::fmt::Formatter;
 
+#[allow(dead_code)]
 #[derive(Clone, Debug)]
 pub enum Instruction<'source> {
     Add(
@@ -175,6 +172,7 @@ impl fmt::Display for Label<'_> {
     }
 }
 
+#[allow(dead_code)]
 #[derive(Copy, Clone, PartialEq, Eq, Debug)]
 pub enum RegisterOrLabel<'source> {
     Register(Register),
@@ -371,6 +369,7 @@ impl fmt::Display for Register {
     }
 }
 
+#[allow(dead_code)]
 impl Register {
     pub const RAX: Self = Self(RegisterSize::R, RegisterName::AX);
     pub const RBX: Self = Self(RegisterSize::R, RegisterName::BX);
@@ -399,6 +398,7 @@ impl Register {
     pub const CUR_TYPE: Self = Self(RegisterSize::R, RegisterName::R15);
 }
 
+#[allow(dead_code)]
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Default)]
 pub enum RegisterSize {
     /// Low (8-bit)
@@ -414,6 +414,7 @@ pub enum RegisterSize {
     R,
 }
 
+#[allow(dead_code)]
 #[derive(Copy, Clone, Ord, PartialOrd, Eq, PartialEq, Debug, Default)]
 pub enum RegisterName {
     /// Accumulator
@@ -467,6 +468,7 @@ impl fmt::Display for RegisterName {
 }
 
 #[derive(Copy, Clone, Eq, PartialEq, Ord, PartialOrd, Hash, Debug)]
+#[allow(dead_code)]
 pub enum SectionId {
     Bss,
     Comment,
