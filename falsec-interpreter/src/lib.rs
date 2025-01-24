@@ -203,7 +203,7 @@ impl<Input: Read, Output: Write> Interpreter<'_, Input, Output> {
                             state.program_counter,
                         ))
                     }
-                    (Integer(i), _) => Ok(((i as u8 & 32) + b'a') as char),
+                    (Integer(i), _) => Ok(((i as u8 & 31) + b'a') as char),
                     (Var(c), _) => Ok(c),
                     (Lambda(_), TypeSafety::Full | TypeSafety::LambdaAndVar) => {
                         Err(InterpreterError::type_cast_error(
@@ -214,7 +214,7 @@ impl<Input: Read, Output: Write> Interpreter<'_, Input, Output> {
                             state.program_counter,
                         ))
                     }
-                    (Lambda(id), _) => Ok(((id as u8 & 32) + b'a') as char),
+                    (Lambda(id), _) => Ok(((id as u8 & 31) + b'a') as char),
                 }
             }
 
@@ -477,6 +477,7 @@ mod tests {
     use crate::{Interpreter, StackValue};
     use falsec_types::source::LambdaCommand::LambdaReference;
     use falsec_types::source::{Command, Pos, Program, Span};
+    use falsec_types::{Config, TypeSafety};
     use std::borrow::Cow;
     use std::cell::RefCell;
     use std::collections::HashMap;
@@ -909,5 +910,30 @@ mod tests {
         };
         interpreter.run().unwrap();
         assert_eq!(output, b"A: 123\nB: 321\n123 + 321 = 444\n");
+    }
+
+    #[test]
+    fn number_as_var() {
+        let program = simple_program![
+            Command::IntLiteral(123),
+            Command::Var('c'),
+            Command::Store,
+            Command::IntLiteral(2),
+            Command::Load,
+        ];
+        let stack = Rc::<RefCell<_>>::default();
+        Interpreter::<&[_], &mut [_]> {
+            input: &[],
+            output: &mut [],
+            program,
+            config: Config {
+                type_safety: TypeSafety::None,
+                ..Default::default()
+            },
+            stack: stack.clone(),
+        }
+        .run()
+        .unwrap();
+        assert_eq!(stack.borrow().deref(), &[StackValue::Integer(123)]);
     }
 }

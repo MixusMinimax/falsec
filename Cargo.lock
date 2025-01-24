@@ -144,6 +144,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "falsec-cli"
+version = "0.1.0"
+
+[[package]]
 name = "falsec-compiler"
 version = "0.1.0"
 dependencies = [
