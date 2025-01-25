@@ -697,10 +697,8 @@ fn write_assembly(assembly: Assembly, mut output: impl Write) -> Result<(), Comp
             if !current_line.is_empty()
                 && match instruction {
                     Instruction::CommentEndOfLine(..) => false,
-                    Instruction::DB(_)
-                    | Instruction::DW(_)
-                    | Instruction::Equ(_)
-                    | Instruction::Reserve(..)
+                    Instruction::Equ(_) if previous_instruction_was_label => false,
+                    Instruction::DB(_) | Instruction::DW(_) | Instruction::Reserve(..)
                         if previous_instruction_was_label && current_line.len() < 8 =>
                     {
                         false
@@ -716,7 +714,7 @@ fn write_assembly(assembly: Assembly, mut output: impl Write) -> Result<(), Comp
             match instruction {
                 Instruction::Add(dst, src) => write!(current_line, "\tadd {}, {}", dst, src)?,
                 Instruction::And(dst, src) => write!(current_line, "\tand {}, {}", dst, src)?,
-                Instruction::Call(label) => write!(current_line, "\tcall [rel {}]", label)?,
+                Instruction::Call(operand) => write!(current_line, "\tcall {}", operand)?,
                 Instruction::Cld => write!(current_line, "\tcld")?,
                 Instruction::CMovE(dst, src) => write!(current_line, "\tcmove {}, {}", dst, src)?,
                 Instruction::CMovL(dst, src) => write!(current_line, "\tcmovl {}, {}", dst, src)?,

@@ -216,10 +216,19 @@ pub struct Address<'source> {
     /// 0 is treated as 1, to make the Default derive work. 0 is not a valid value.
     pub stride: u64,
     pub address_offset: i64,
+    pub size: Option<RegisterSize>,
 }
 
 impl fmt::Display for Address<'_> {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
+        match self.size {
+            Some(RegisterSize::L) => write!(f, "byte ")?,
+            Some(RegisterSize::H) => unreachable!("High byte is not supported"),
+            Some(RegisterSize::W) => write!(f, "word ")?,
+            Some(RegisterSize::E) => write!(f, "dword ")?,
+            Some(RegisterSize::R) => write!(f, "qword ")?,
+            None => (),
+        }
         write!(f, "[{}", self.base)?;
         if let Some(index) = self.index {
             write!(f, "+")?;
@@ -303,6 +312,13 @@ impl<'source> Address<'source> {
             index_offset,
             stride,
             ..Default::default()
+        }
+    }
+
+    pub fn with_size(self, size: impl Into<Option<RegisterSize>>) -> Self {
+        Self {
+            size: size.into(),
+            ..self
         }
     }
 }

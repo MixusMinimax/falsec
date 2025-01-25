@@ -1,8 +1,10 @@
 use crate::error::CompilerError;
 use falsec_types::source::Program;
 use falsec_types::Config;
+use std::any::Any;
+use std::fmt::Debug;
 use std::io;
-use std::io::Write;
+use std::io::{Seek, SeekFrom, Write};
 use tempfile::NamedTempFile;
 
 mod error;
@@ -16,13 +18,17 @@ pub enum Target {
     LinuxX86_64Elf,
 }
 
-#[derive(Clone, Debug, Default)]
+pub trait Dump: Debug + Write + Any {}
+impl<T: Debug + Write + Any> Dump for T {}
+
+#[derive(Debug, Default)]
 pub struct CompileRequest<'source, Output: Write> {
     pub source: &'source str,
     pub program: Program<'source>,
     pub output: Output,
     pub target: Target,
     pub config: Config,
+    pub dump_asm: Option<Box<dyn Dump>>,
 }
 
 pub fn compile<Output: Write>(
@@ -31,6 +37,7 @@ pub fn compile<Output: Write>(
         target,
         mut output,
         config,
+        dump_asm,
         ..
     }: CompileRequest<Output>,
 ) -> Result<(), CompilerError> {
@@ -38,6 +45,10 @@ pub fn compile<Output: Write>(
     match target {
         Target::LinuxX86_64Elf => linux_x86_64_elf::compile(program, &mut assembly_file, config)?,
         t => panic!("Unsupported target: {:?}", t),
+    }
+    if let Some(mut dump_asm) = dump_asm {
+        assembly_file.seek(SeekFrom::Start(0))?;
+        std::io::copy(&mut assembly_file, &mut dump_asm)?;
     }
     let mut output_file = NamedTempFile::new()?;
     nasm::assemble(assembly_file.path(), output_file.path(), target);
@@ -66,6 +77,7 @@ mod tests {
             output: &mut output,
             target: super::Target::LinuxX86_64Elf,
             config: Default::default(),
+            dump_asm: None,
         })
         .unwrap();
         assert_ne!(output.len(), 0);

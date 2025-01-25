@@ -1,16 +1,34 @@
 use clap::Parser;
-use falsec_cli::{Cli, Commands, Run};
+use falsec_cli::{Cli, Commands, Compile, Run, TypeSafety};
+use falsec_compiler::{compile, CompileRequest, Target};
 use falsec_types::source::Program;
 use falsec_types::Config;
-use std::ffi::OsString;
-use std::io::{stdin, stdout, Read};
+use std::borrow::Cow;
+use std::cell::OnceCell;
+use std::ffi::{OsStr, OsString};
+use std::fs::File;
+use std::io::{stdin, stdout, Read, Write};
+use std::path::PathBuf;
+
+trait FromArg<T> {
+    fn from_arg(t: T) -> Self;
+}
+
+impl FromArg<TypeSafety> for falsec_types::TypeSafety {
+    fn from_arg(t: TypeSafety) -> Self {
+        match t {
+            TypeSafety::None => Self::None,
+            TypeSafety::Lambda => Self::Lambda,
+            TypeSafety::LambdaAndVar => Self::LambdaAndVar,
+            TypeSafety::Full => Self::Full,
+        }
+    }
+}
 
 fn main() {
     let cli = Cli::parse();
 
-    eprintln!("args: {:?}", cli);
-
-    let config = if let Some(config) = cli.config {
+    let mut config = if let Some(config) = cli.config {
         let config = std::fs::read_to_string(config).unwrap();
         toml::from_str(&config).unwrap()
     } else {
@@ -18,14 +36,63 @@ fn main() {
     };
 
     match cli.command {
-        Commands::Run(Run { program, .. }) => {
+        Commands::Run(Run {
+            program,
+            type_safety,
+        }) => {
+            if let Some(type_safety) = type_safety {
+                config.type_safety = FromArg::from_arg(type_safety);
+            }
             let source_code = read_program(program);
             let program = parse_program(&source_code, &config);
             let interpreter =
                 falsec_interpreter::Interpreter::new(stdin(), stdout(), program, config);
             interpreter.run().unwrap();
         }
-        Commands::Compile(..) => todo!(),
+        Commands::Compile(Compile {
+            program,
+            out,
+            type_safety,
+            dump_asm,
+        }) => {
+            if let Some(type_safety) = type_safety {
+                config.type_safety = FromArg::from_arg(type_safety);
+            }
+            let out_path =
+                out.unwrap_or_else(|| PathBuf::from(&program).with_extension("").into_os_string());
+            let source_code = read_program(program);
+            let program = parse_program(&source_code, &config);
+            #[derive(Debug, Default)]
+            struct LazyFile<'a>(Cow<'a, OsStr>, OnceCell<File>);
+            impl<'a> LazyFile<'a> {
+                fn new(p: impl Into<Cow<'a, OsStr>>) -> Self {
+                    Self(p.into(), Default::default())
+                }
+
+                fn get(&self) -> &File {
+                    self.1.get_or_init(|| File::create(&self.0).unwrap())
+                }
+            }
+            impl Write for LazyFile<'_> {
+                fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+                    self.get().write(buf)
+                }
+                fn flush(&mut self) -> std::io::Result<()> {
+                    self.get().flush()
+                }
+            }
+            compile(CompileRequest {
+                source: &source_code,
+                program,
+                output: LazyFile::new(&out_path),
+                target: Target::LinuxX86_64Elf,
+                config,
+                dump_asm: dump_asm
+                    .map(|p| PathBuf::from(p).with_extension("asm").into_os_string())
+                    .map(|p| Box::new(LazyFile::new(p)) as _),
+            })
+            .unwrap();
+        }
     }
 }
 

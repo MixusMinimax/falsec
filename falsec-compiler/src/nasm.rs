@@ -1,4 +1,5 @@
 use crate::Target;
+use std::fmt::Write;
 use std::fs::File;
 use std::path::Path;
 use std::process::{Command, Output};
@@ -32,7 +33,14 @@ pub fn assemble(assembly_path: &Path, output_path: &Path, target: Target) {
             panic!(
                 "Failed to assemble: {}\n{}",
                 String::from_utf8(stderr).unwrap(),
-                std::fs::read_to_string(assembly_path).unwrap()
+                std::fs::read_to_string(assembly_path)
+                    .unwrap()
+                    .lines()
+                    .enumerate()
+                    .fold(String::new(), |mut output, (i, l)| {
+                        writeln!(output, "{:4} {}", i + 1, l).unwrap();
+                        output
+                    })
             )
         }
         _ => (),

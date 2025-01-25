@@ -23,9 +23,8 @@ pub enum Commands {
     Compile(Compile),
 }
 
-#[derive(ValueEnum, Copy, Clone, PartialEq, Eq, Debug, Default)]
+#[derive(ValueEnum, Copy, Clone, PartialEq, Eq, Debug)]
 pub enum TypeSafety {
-    #[default]
     /// No type safety checks are performed.
     None,
     /// When trying to execute a lambda, make sure that the popped value is a lambda.
@@ -47,14 +46,8 @@ mod run {
     #[derive(Debug, Parser)]
     #[command(version, about, long_about = None)]
     pub struct Run {
-        #[arg(
-            long,
-            require_equals = true,
-            value_name = "TYPE",
-            default_value_t = Default::default(),
-            value_enum
-        )]
-        pub type_safety: TypeSafety,
+        #[arg(long, require_equals = true, value_name = "TYPE", value_enum)]
+        pub type_safety: Option<TypeSafety>,
 
         /// The path to the FALSE program to execute
         pub program: OsString,
@@ -72,14 +65,16 @@ mod compile {
     #[derive(Debug, Parser)]
     #[command(version, about, long_about = None)]
     pub struct Compile {
-        #[arg(
-            long,
-            require_equals = true,
-            value_name = "TYPE",
-            default_value_t = Default::default(),
-            value_enum
-        )]
-        pub type_safety: TypeSafety,
+        #[arg(long, require_equals = true, value_name = "TYPE", value_enum)]
+        pub type_safety: Option<TypeSafety>,
+
+        /// The path to the intermediary assembly
+        #[arg(long, value_name = "FILE")]
+        pub dump_asm: Option<OsString>,
+
+        /// The path to the compiled FALSE program
+        #[arg(short, long, value_name = "FILE")]
+        pub out: Option<OsString>,
 
         /// The path to the FALSE program to execute
         pub program: OsString,

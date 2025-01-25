@@ -120,7 +120,7 @@ impl<'source> Boilerplate<'source> for Assembly<'source> {
             .js(direct_print_stdout)
             // there is enough space in the stdout_buffer. copy the contents of rsi there.
             // vvv
-            .add(Label::StdoutLen, Register::RDX)
+            .add(Address::b(Label::StdoutLen), Register::RDX)
             .lea(Register::RDI, Address::b(Label::StdoutBuffer))
             .ins(Instruction::Cld)
             .mov(Register::RCX, Register::RDX)
@@ -149,7 +149,7 @@ impl<'source> Boilerplate<'source> for Assembly<'source> {
             .lea(Register::RSI, Address::b(Label::StdoutBuffer))
             .mov(Register::RDX, Address::b(Label::StdoutLen))
             .ins(Instruction::Syscall)
-            .mov(Address::b(Label::StdoutLen), 0)
+            .mov(Address::b(Label::StdoutLen).with_size(RegisterSize::R), 0)
             .ins(Instruction::Ret)
     }
 
