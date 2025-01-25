@@ -316,6 +316,10 @@ pub fn compile<Output: Write>(
                 Command::ReadChar => {
                     asm.xor(Register::RAX, Register::RAX) // sys_read
                         .xor(Register::RDI, Register::RDI) // stdin
+                        .mov(
+                            Address::bis(Register::STACK_BASE, Register::STACK_COUNTER, 8),
+                            Register::RAX,
+                        )
                         .lea(
                             Register::RSI,
                             Address::bis(Register::STACK_BASE, Register::STACK_COUNTER, 8),
@@ -333,7 +337,8 @@ pub fn compile<Output: Write>(
                     asm.test(Register::RAX, Register::RAX)
                         .jnz(label)
                         .mov(
-                            Address::bis(Register::STACK_BASE, Register::STACK_COUNTER, 8),
+                            Address::bis(Register::STACK_BASE, Register::STACK_COUNTER, 8)
+                                .with_size(RegisterSize::R),
                             -1,
                         )
                         .label(label)
