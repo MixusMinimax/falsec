@@ -60,7 +60,7 @@ impl<'source> Boilerplate<'source> for Assembly<'source> {
                 [
                     Instruction::Label(label_expected_type(t)),
                     Instruction::DB(Cow::Owned(
-                        format!("Tried to pop {} from stack!\n", t).into_bytes(),
+                        format!("Expected to pop {} from stack!\n", t).into_bytes(),
                     )),
                     Instruction::Label(label_expected_type_len(t)),
                     Instruction::Equ(Cow::Owned(format!("$ - {}", label_expected_type(t)))),
@@ -155,6 +155,9 @@ impl<'source> Boilerplate<'source> for Assembly<'source> {
             // if fd (in rdi) is 1, go to stdout buffering. otherwise, direct syscall.
             .cmp(Register::RDI, 1) // stdout
             .je(handle_stdout)
+            .cpush(Register::RDX)
+            .call(Label::FlushStdout)
+            .cpop(Register::RDX)
             .mov(Register::RAX, 1) // sys_write
             .ins(Instruction::Syscall)
             .jmp(return_label)

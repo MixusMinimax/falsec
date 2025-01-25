@@ -1,2 +1,3 @@
 $schema: ../config.schema.json
 write_command_comments: true
+type_safety: Full
