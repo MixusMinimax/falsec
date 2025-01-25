@@ -225,6 +225,7 @@ impl<'source> Boilerplate<'source> for Assembly<'source> {
         self.label(Label::FlushStdout)
             .ins(Instruction::Comment(Cow::Borrowed("void flush_stdout()")))
             .mov(Register::RAX, Address::b(Label::StdoutLen))
+            .test(Register::RAX, Register::RAX)
             .jz(return_label)
             .cpush(Register::RDI)
             .cpush(Register::RSI)
@@ -247,6 +248,10 @@ impl<'source> Boilerplate<'source> for Assembly<'source> {
         let skip_flush = self.new_label();
         let return_label = self.new_label();
 
+        let continue_label = self.new_label();
+        let iter_label = self.new_label();
+        let revert_label = self.new_label();
+
         self.label(Label::PrintDecimal)
             .ins(Instruction::Comment(Cow::Borrowed(
                 "void print_decimal(int64_t num)",
@@ -258,7 +263,65 @@ impl<'source> Boilerplate<'source> for Assembly<'source> {
             .jns(skip_flush)
             .call(Label::FlushStdout)
             .label(skip_flush)
-            // TODO
+            .test(Register::RDI, Register::RDI)
+            .jnz(continue_label)
+            // if num is 0, print 0
+            .mov(Register::RAX, Address::b(Label::StdoutLen))
+            .mov(
+                Address::bi(Label::StdoutBuffer, Register::RAX).with_size(RegisterSize::L),
+                b'0' as u64,
+            )
+            .inc(Address::b(Label::StdoutLen).with_size(RegisterSize::R))
+            .jmp(return_label)
+            .label(continue_label)
+            // decimal conversion
+            .lea(Register::R8, Address::b(Label::DecimalBuffer))
+            .mov(Register::R9, Register::RDI) // original argument
+            .mov(Register::R10, 10)
+            // rax = abs(num)
+            .mov(Register::RAX, Register::RDI)
+            .sar(Register::RDI, 63)
+            .xor(Register::RAX, Register::RDI)
+            .sub(Register::RAX, Register::RDI)
+            // len = 0
+            .xor(Register::RCX, Register::RCX)
+            .ins(Instruction::Align(16))
+            // vvv conversion loop
+            .label(iter_label)
+            .xor(Register::RDX, Register::RDX)
+            .div(Register::R10)
+            .or(Register::DL, b'0' as u64)
+            .mov(
+                Address::bi(Register::R8, Register::RCX).with_size(RegisterSize::L),
+                Register::DL,
+            )
+            .inc(Register::CL)
+            .test(Register::RAX, Register::RAX)
+            .jnz(iter_label)
+            // ^^^
+            .lea(Register::RSI, Address::bia(Register::R8, Register::RCX, -1))
+            .mov(Register::RDI, Address::b(Label::StdoutLen))
+            .lea(
+                Register::RDI,
+                Address::bi(Label::StdoutBuffer, Register::RDI),
+            )
+            .add(Address::b(Label::StdoutLen), Register::RCX)
+            // add sign
+            .test(Register::R9, Register::R9)
+            .jns(revert_label)
+            .mov(Register::RAX, b'-' as u64)
+            .ins(Instruction::Cld)
+            .ins(Instruction::Stosb)
+            .inc(Address::b(Label::StdoutLen).with_size(RegisterSize::R))
+            .ins(Instruction::Align(16))
+            // vvv revert loop
+            .label(revert_label)
+            .ins(Instruction::Std)
+            .ins(Instruction::Lodsb)
+            .ins(Instruction::Cld)
+            .ins(Instruction::Stosb)
+            .loop_(revert_label)
+            // ^^^
             .label(return_label)
             .ins(Instruction::Ret)
     }

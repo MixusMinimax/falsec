@@ -195,7 +195,7 @@ pub fn compile<Output: Write>(
                 Command::Mul => asm
                     .pop(Register::RDX, ValueType::Number)
                     .peek(Register::RAX, ValueType::Number)
-                    .mul(Register::RAX, Register::RDX)
+                    .imul(Register::RAX, Register::RDX)
                     .replace(Register::RAX, ValueType::Number),
                 Command::Div => asm
                     .pop(Register::RDI, ValueType::Number)
@@ -285,14 +285,17 @@ pub fn compile<Output: Write>(
                     asm.pop(Register::RAX, ValueType::Variable)
                         .pop_any(Register::RDX)
                         .and(Register::RAX, 0b11111)
-                        .lea(Register::RBX, Address::b(Label::Variables))
-                        .mov(Address::bis(Register::RBX, Register::RAX, 8), Register::RDX);
+                        .mov(
+                            Address::bis(Label::Variables, Register::RAX, 8)
+                                .with_size(RegisterSize::R),
+                            Register::RDX,
+                        );
                     if config.type_safety != TypeSafety::None {
-                        asm.lea(Register::RBX, Address::b(Label::VariableTypes))
-                            .mov(
-                                Address::bi(Register::RBX, Register::RAX),
-                                Register::CUR_TYPE,
-                            );
+                        asm.mov(
+                            Address::bi(Label::VariableTypes, Register::RAX)
+                                .with_size(RegisterSize::L),
+                            Register::CUR_TYPE,
+                        );
                     }
                     &mut asm
                 }
@@ -517,10 +520,12 @@ impl<'source> Assembly<'source> {
         fn cmp -> Cmp;
         fn mov -> Mov;
         fn movzx -> MovZX;
-        fn mul -> Mul;
+        fn imul -> IMul;
         fn or -> Or;
         fn shl -> Shl;
         fn shr -> Shr;
+        fn sal -> Sal;
+        fn sar -> Sar;
         fn sub -> Sub;
         fn test -> Test;
         fn xor -> Xor;
@@ -529,6 +534,7 @@ impl<'source> Assembly<'source> {
     unop_fun! {
         fn call -> Call;
         fn dec -> Dec;
+        fn div -> Div;
         fn idiv -> IDiv;
         fn inc -> Inc;
 
@@ -553,6 +559,8 @@ impl<'source> Assembly<'source> {
         fn js -> Js;
         /// Jump if not sign
         fn jns -> Jns;
+        /// decrement rcx and jump if not zero
+        fn loop_ -> Loop;
 
         fn neg -> Neg;
         fn not -> Not;
@@ -591,7 +599,8 @@ impl<'source> Assembly<'source> {
         let value_type = value_type.into();
         assert_ne!(value_type, ValueTypeSelector::Any);
         self.mov(
-            Address::bis(Register::STACK_BASE, Register::STACK_COUNTER, 8),
+            Address::bis(Register::STACK_BASE, Register::STACK_COUNTER, 8)
+                .with_size(RegisterSize::R),
             value.into(),
         );
         if self.config.type_safety != TypeSafety::None {
@@ -701,10 +710,12 @@ impl<'source> Assembly<'source> {
 }
 
 fn write_assembly(assembly: Assembly, mut output: impl Write) -> Result<(), CompilerError> {
+    let mut sections: Vec<_> = assembly.sections.into_values().collect();
+    sections.sort_by_key(|section| section.section_id);
     for Section {
         section_id,
         instructions,
-    } in assembly.sections.into_values()
+    } in sections
     {
         writeln!(output, "\tSECTION {}", section_id)?;
         let mut current_line = Vec::<u8>::new();
@@ -737,6 +748,7 @@ fn write_assembly(assembly: Assembly, mut output: impl Write) -> Result<(), Comp
                 Instruction::And(dst, src) => write!(current_line, "\tand {}, {}", dst, src)?,
                 Instruction::Call(operand) => write!(current_line, "\tcall {}", operand)?,
                 Instruction::Cld => write!(current_line, "\tcld")?,
+                Instruction::Std => write!(current_line, "\tstd")?,
                 Instruction::CMovE(dst, src) => write!(current_line, "\tcmove {}, {}", dst, src)?,
                 Instruction::CMovL(dst, src) => write!(current_line, "\tcmovl {}, {}", dst, src)?,
                 Instruction::Cmp(a, b) => write!(current_line, "\tcmp {}, {}", a, b)?,
@@ -781,6 +793,7 @@ fn write_assembly(assembly: Assembly, mut output: impl Write) -> Result<(), Comp
                 Instruction::Dec(operand) => write!(current_line, "\tdec {}", operand)?,
                 Instruction::Equ(expr) => write!(current_line, "\tequ {}", expr)?,
                 Instruction::Global(symbol) => write!(current_line, "\tglobal {}", symbol)?,
+                Instruction::Div(operand) => write!(current_line, "\tdiv {}", operand)?,
                 Instruction::IDiv(operand) => write!(current_line, "\tidiv {}", operand)?,
                 Instruction::Inc(operand) => write!(current_line, "\tinc {}", operand)?,
 
@@ -795,12 +808,13 @@ fn write_assembly(assembly: Assembly, mut output: impl Write) -> Result<(), Comp
                 Instruction::Jnz(operand) => write!(current_line, "\tjnz {}", operand)?,
                 Instruction::Js(operand) => write!(current_line, "\tjs {}", operand)?,
                 Instruction::Jns(operand) => write!(current_line, "\tjns {}", operand)?,
+                Instruction::Loop(operand) => write!(current_line, "\tloop {}", operand)?,
 
                 Instruction::Label(label) => write!(current_line, "{}:", label)?,
                 Instruction::Lea(dst, src) => write!(current_line, "\tlea {}, {}", dst, src)?,
                 Instruction::Mov(dst, src) => write!(current_line, "\tmov {}, {}", dst, src)?,
                 Instruction::MovZX(dst, src) => write!(current_line, "\tmovzx {}, {}", dst, src)?,
-                Instruction::Mul(dst, src) => write!(current_line, "\tmul {}, {}", dst, src)?,
+                Instruction::IMul(dst, src) => write!(current_line, "\timul {}, {}", dst, src)?,
                 Instruction::Neg(operand) => write!(current_line, "\tneg {}", operand)?,
                 Instruction::Nop => write!(current_line, "\tnop")?,
                 Instruction::Not(operand) => write!(current_line, "\tnot {}", operand)?,
@@ -812,10 +826,14 @@ fn write_assembly(assembly: Assembly, mut output: impl Write) -> Result<(), Comp
                 Instruction::SetG(operand) => write!(current_line, "\tsetg {}", operand)?,
                 Instruction::Shl(dst, src) => write!(current_line, "\tshl {}, {}", dst, src)?,
                 Instruction::Shr(dst, src) => write!(current_line, "\tshr {}, {}", dst, src)?,
+                Instruction::Sal(dst, src) => write!(current_line, "\tsal {}, {}", dst, src)?,
+                Instruction::Sar(dst, src) => write!(current_line, "\tsar {}, {}", dst, src)?,
                 Instruction::Sub(dst, src) => write!(current_line, "\tsub {}, {}", dst, src)?,
                 Instruction::Syscall => write!(current_line, "\tsyscall")?,
                 Instruction::Test(a, b) => write!(current_line, "\ttest {}, {}", a, b)?,
                 Instruction::Xor(dst, src) => write!(current_line, "\txor {}, {}", dst, src)?,
+                Instruction::Lodsb => write!(current_line, "\tlodsb")?,
+                Instruction::Stosb => write!(current_line, "\tstosb")?,
                 Instruction::RepMovsb => write!(current_line, "\trep movsb")?,
                 Instruction::RepMovsq => write!(current_line, "\trep movsq")?,
                 Instruction::Reserve(size, count) => match size {

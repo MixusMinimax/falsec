@@ -15,6 +15,7 @@ pub enum Instruction<'source> {
     And(Operand<'source>, Operand<'source>),
     Call(Operand<'source>),
     Cld,
+    Std,
     CMovE(
         /// Destination
         Operand<'source>,
@@ -38,6 +39,7 @@ pub enum Instruction<'source> {
     Dec(Operand<'source>),
     Equ(Cow<'source, str>),
     Global(Label<'source>),
+    Div(Operand<'source>),
     IDiv(Operand<'source>),
     Inc(Operand<'source>),
 
@@ -62,6 +64,8 @@ pub enum Instruction<'source> {
     Js(Operand<'source>),
     /// Jump if not sign
     Jns(Operand<'source>),
+    /// decrement rcx and jump if not zero
+    Loop(Operand<'source>),
 
     Label(Label<'source>),
     Lea(
@@ -82,7 +86,7 @@ pub enum Instruction<'source> {
         /// Source
         Operand<'source>,
     ),
-    Mul(
+    IMul(
         /// Destination
         Operand<'source>,
         /// Source
@@ -101,6 +105,8 @@ pub enum Instruction<'source> {
     SetG(Operand<'source>),
     Shl(Operand<'source>, Operand<'source>),
     Shr(Operand<'source>, Operand<'source>),
+    Sal(Operand<'source>, Operand<'source>),
+    Sar(Operand<'source>, Operand<'source>),
     Sub(
         /// Destination
         Operand<'source>,
@@ -115,6 +121,8 @@ pub enum Instruction<'source> {
         /// Source
         Operand<'source>,
     ),
+    Lodsb,
+    Stosb,
     RepMovsb,
     RepMovsq,
     Reserve(RegisterSize, u64),
@@ -326,6 +334,20 @@ impl<'source> Address<'source> {
         }
     }
 
+    /// `[base+index+address_offset]`
+    pub fn bia(
+        base: impl Into<RegisterOrLabel<'source>>,
+        index: Register,
+        address_offset: i64,
+    ) -> Self {
+        Self {
+            base: base.into(),
+            index: Some(index),
+            address_offset,
+            ..Default::default()
+        }
+    }
+
     pub fn with_size(self, size: impl Into<Option<RegisterSize>>) -> Self {
         Self {
             size: size.into(),
@@ -419,6 +441,7 @@ impl Register {
     pub const R10: Self = Self(RegisterSize::R, RegisterName::R10);
 
     pub const AL: Self = Self(RegisterSize::L, RegisterName::AX);
+    pub const CL: Self = Self(RegisterSize::L, RegisterName::CX);
     pub const DL: Self = Self(RegisterSize::L, RegisterName::DX);
     pub const DIL: Self = Self(RegisterSize::L, RegisterName::DI);
     pub const SIL: Self = Self(RegisterSize::L, RegisterName::SI);
@@ -434,7 +457,7 @@ impl Register {
     pub const TYPE_STACK_BASE: Self = Self(RegisterSize::R, RegisterName::R14);
 
     /// The current type. Used for validation, if enabled.
-    pub const CUR_TYPE: Self = Self(RegisterSize::R, RegisterName::R15);
+    pub const CUR_TYPE: Self = Self(RegisterSize::L, RegisterName::R15);
 }
 
 #[allow(dead_code)]
