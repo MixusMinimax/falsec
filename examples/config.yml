@@ -1,0 +1,2 @@
+$schema: ../config.schema.json
+write_command_comments: true

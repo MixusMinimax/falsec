@@ -3,7 +3,7 @@ use crate::linux_x86_64_elf::asm::{
 };
 
 use crate::linux_x86_64_elf::{label_expected_type, label_expected_type_len, Assembly, ValueType};
-use falsec_types::Config;
+use falsec_types::{Config, TypeSafety};
 use std::borrow::Cow;
 use std::collections::HashMap;
 
@@ -12,7 +12,11 @@ pub(super) trait Boilerplate<'source> {
 
     fn write_error_messages(&mut self, strings: HashMap<u64, Cow<'source, str>>) -> &mut Self;
 
+    fn write_setup(&mut self, config: &Config) -> &mut Self;
+
     fn write_print_string(&mut self, config: &Config) -> &mut Self;
+
+    fn write_print_char(&mut self, config: &Config) -> &mut Self;
 
     fn write_flush_stdout(&mut self) -> &mut Self;
 
@@ -85,6 +89,51 @@ impl<'source> Boilerplate<'source> for Assembly<'source> {
         self
     }
 
+    fn write_setup(&mut self, config: &Config) -> &mut Self {
+        if config.stack_size.0 % 8 != 0 {
+            panic!("Stack size must be a multiple of 8");
+        }
+
+        fn mmap<'a, 'source>(
+            assm: &'a mut Assembly<'source>,
+            size: u64,
+        ) -> &'a mut Assembly<'source> {
+            let success_label = assm.new_label();
+            assm.mov(Register::RAX, 9)
+                .xor(Register::RDI, Register::RDI)
+                .mov(Register::RSI, size)
+                .mov(Register::RDX, 0b0001 | 0b0010)
+                .mov(Register::R10, 0b00000010 | 0b00100000)
+                .mov(Register::R8, -1)
+                .xor(Register::R9, Register::R9)
+                .ins(Instruction::Syscall)
+                .test(Register::RAX, Register::RAX)
+                .jns(success_label)
+                .com("mmap failed")
+                .mov(Register::RDI, 2)
+                .lea(Register::RSI, Address::b(Label::Named("mmap_error")))
+                .mov(Register::RDX, Address::b(Label::Named("mmap_error_len")))
+                .call(Label::PrintString)
+                .mov(Register::RAX, 60)
+                .mov(Register::RDI, 1)
+                .ins(Instruction::Syscall)
+                .label(success_label)
+                .ins(Instruction::Nop)
+        }
+
+        self.com("===[SETUP START]===").com("Allocate FALSE stack:");
+        mmap(self, config.stack_size.0);
+        self.mov(Register::STACK_BASE, Register::RAX);
+
+        if config.type_safety != TypeSafety::None {
+            self.com("Allocate type stack:");
+            mmap(self, config.stack_size.0 / 8);
+            self.mov(Register::TYPE_STACK_BASE, Register::RAX);
+        }
+
+        self.com("===[SETUP END]===")
+    }
+
     fn write_print_string(&mut self, config: &Config) -> &mut Self {
         // rdi: fd
         // rsi: ptr
@@ -120,8 +169,12 @@ impl<'source> Boilerplate<'source> for Assembly<'source> {
             .js(direct_print_stdout)
             // there is enough space in the stdout_buffer. copy the contents of rsi there.
             // vvv
+            .mov(Register::RAX, Address::b(Label::StdoutLen))
             .add(Address::b(Label::StdoutLen), Register::RDX)
-            .lea(Register::RDI, Address::b(Label::StdoutBuffer))
+            .lea(
+                Register::RDI,
+                Address::bi(Label::StdoutBuffer, Register::RAX),
+            )
             .ins(Instruction::Cld)
             .mov(Register::RCX, Register::RDX)
             .shr(Register::RCX, 3)
@@ -141,15 +194,46 @@ impl<'source> Boilerplate<'source> for Assembly<'source> {
             .ins(Instruction::Ret)
     }
 
+    fn write_print_char(&mut self, config: &Config) -> &mut Self {
+        // rdi: c
+
+        let skip_flush = self.new_label();
+        self.label(Label::PrintChar)
+            .ins(Instruction::Comment(Cow::Borrowed(
+                "void print_char(char c)",
+            )))
+            .mov(Register::RAX, config.stdout_buffer_size.0)
+            .cmp(Register::RAX, Address::b(Label::StdoutLen)) // remaining space
+            .jg(skip_flush)
+            .call(Label::FlushStdout)
+            .label(skip_flush)
+            .lea(Register::RSI, Address::b(Label::StdoutBuffer))
+            .mov(Register::RCX, Address::b(Label::StdoutLen))
+            .mov(
+                Address::bi(Register::RSI, Register::RCX).with_size(RegisterSize::L),
+                Register::DIL,
+            )
+            .inc(Address::b(Label::StdoutLen).with_size(RegisterSize::R))
+            .ins(Instruction::Ret)
+    }
+
     fn write_flush_stdout(&mut self) -> &mut Self {
+        let return_label = self.new_label();
         self.label(Label::FlushStdout)
             .ins(Instruction::Comment(Cow::Borrowed("void flush_stdout()")))
+            .mov(Register::RAX, Address::b(Label::StdoutLen))
+            .jz(return_label)
+            .cpush(Register::RDI)
+            .cpush(Register::RSI)
             .mov(Register::RAX, 1) // sys_write
             .mov(Register::RDI, 1) // stdout
             .lea(Register::RSI, Address::b(Label::StdoutBuffer))
             .mov(Register::RDX, Address::b(Label::StdoutLen))
             .ins(Instruction::Syscall)
             .mov(Address::b(Label::StdoutLen).with_size(RegisterSize::R), 0)
+            .cpop(Register::RSI)
+            .cpop(Register::RDI)
+            .label(return_label)
             .ins(Instruction::Ret)
     }
 

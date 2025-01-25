@@ -8,7 +8,7 @@ if __name__ == '__main__':
     import git
 
     repo = git.Repo(os.getcwd(), search_parent_directories=True).working_dir
-    schema_path = Path(repo) / 'config_schema.json'
+    schema_path = Path(repo) / 'config.schema.json'
 
     subprocess.run([
         'cargo', 'run', '-q', '--release', '--features=schema', '--package', 'falsec-types', '--bin',

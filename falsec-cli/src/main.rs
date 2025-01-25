@@ -29,8 +29,23 @@ fn main() {
     let cli = Cli::parse();
 
     let mut config = if let Some(config) = cli.config {
-        let config = std::fs::read_to_string(config).unwrap();
-        toml::from_str(&config).unwrap()
+        match config
+            .extension()
+            .map(|e| e.to_str().unwrap().to_ascii_lowercase())
+            .as_deref()
+        {
+            Some("toml") => {
+                let config = std::fs::read_to_string(config).unwrap();
+                toml::from_str(&config).unwrap()
+            }
+            Some("json") => serde_json::from_reader(File::open(config).unwrap()).unwrap(),
+            Some("json5") => {
+                let config = std::fs::read_to_string(config).unwrap();
+                json5::from_str(&config).unwrap()
+            }
+            Some("yml" | "yaml") => serde_yaml::from_reader(File::open(config).unwrap()).unwrap(),
+            _ => panic!("Unsupported config file format"),
+        }
     } else {
         Config::default()
     };

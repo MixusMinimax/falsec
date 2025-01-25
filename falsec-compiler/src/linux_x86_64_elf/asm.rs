@@ -5,6 +5,7 @@ use std::fmt::Formatter;
 #[allow(dead_code)]
 #[derive(Clone, Debug)]
 pub enum Instruction<'source> {
+    Align(u64),
     Add(
         /// Destination
         Operand<'source>,
@@ -32,6 +33,8 @@ pub enum Instruction<'source> {
     Cqo,
     DB(Cow<'source, [u8]>),
     DW(i64),
+    DD(i64),
+    DQ(i64),
     Dec(Operand<'source>),
     Equ(Cow<'source, str>),
     Global(Label<'source>),
@@ -39,6 +42,14 @@ pub enum Instruction<'source> {
     Inc(Operand<'source>),
 
     Jmp(Operand<'source>),
+    /// Jump if greater
+    Jg(Operand<'source>),
+    /// Jump if not greater
+    Jng(Operand<'source>),
+    /// Jump if less
+    Jl(Operand<'source>),
+    /// Jump if not less
+    Jnl(Operand<'source>),
     /// Jump if equal
     Je(Operand<'source>),
     /// Jump if not equal
@@ -367,7 +378,14 @@ impl fmt::Display for Register {
         use RegisterName::*;
         use RegisterSize::*;
         match self.1 {
-            AX | BX | CX | SP | BP | DI | SI | DX => match self.0 {
+            AX | BX | CX | DX => match self.0 {
+                L => write!(f, "{}l", self.1),
+                H => write!(f, "{}h", self.1),
+                W => write!(f, "{}x", self.1),
+                E => write!(f, "e{}x", self.1),
+                R => write!(f, "r{}x", self.1),
+            },
+            SP | BP | DI | SI => match self.0 {
                 L => write!(f, "{}l", self.1),
                 H => write!(f, "{}h", self.1),
                 W => write!(f, "{}", self.1),
@@ -396,8 +414,13 @@ impl Register {
     pub const RSI: Self = Self(RegisterSize::R, RegisterName::SI);
     pub const RDX: Self = Self(RegisterSize::R, RegisterName::DX);
 
+    pub const R8: Self = Self(RegisterSize::R, RegisterName::R8);
+    pub const R9: Self = Self(RegisterSize::R, RegisterName::R9);
+    pub const R10: Self = Self(RegisterSize::R, RegisterName::R10);
+
     pub const AL: Self = Self(RegisterSize::L, RegisterName::AX);
     pub const DL: Self = Self(RegisterSize::L, RegisterName::DX);
+    pub const DIL: Self = Self(RegisterSize::L, RegisterName::DI);
     pub const SIL: Self = Self(RegisterSize::L, RegisterName::SI);
 
     /// Stack counter used for the data stack. The data stack is separate from the call stack.
@@ -463,14 +486,14 @@ pub enum RegisterName {
 impl fmt::Display for RegisterName {
     fn fmt(&self, f: &mut Formatter<'_>) -> fmt::Result {
         match self {
-            RegisterName::AX => write!(f, "ax"),
-            RegisterName::BX => write!(f, "bx"),
-            RegisterName::CX => write!(f, "cx"),
+            RegisterName::AX => write!(f, "a"),
+            RegisterName::BX => write!(f, "b"),
+            RegisterName::CX => write!(f, "c"),
             RegisterName::SP => write!(f, "sp"),
             RegisterName::BP => write!(f, "bp"),
             RegisterName::DI => write!(f, "di"),
             RegisterName::SI => write!(f, "si"),
-            RegisterName::DX => write!(f, "dx"),
+            RegisterName::DX => write!(f, "d"),
             RegisterName::R8 => write!(f, "r8"),
             RegisterName::R9 => write!(f, "r9"),
             RegisterName::R10 => write!(f, "r10"),

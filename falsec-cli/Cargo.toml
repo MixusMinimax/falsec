@@ -29,6 +29,9 @@ falsec-analyzer = { path = "../falsec-analyzer", optional = true }
 falsec-compiler = { path = "../falsec-compiler", optional = true }
 serde = { version = "1.0", optional = true, features = ["derive"] }
 toml = { version = "0.8.19", optional = true }
+json5 = { version = "0.4", optional = true }
+serde_json = { version = "1.0", optional = true, features = ["preserve_order"] }
+serde_yaml = { version = "0.9", optional = true }
 
 [features]
 completions = ["dep:clap_complete"]
@@ -40,6 +43,9 @@ runtime = [
     "dep:falsec-compiler",
     "dep:serde",
     "dep:toml",
-    "falsec-types/serde"
+    "dep:json5",
+    "dep:serde_json",
+    "dep:serde_yaml",
+    "falsec-types/serde",
 ]
 default = ["runtime"]

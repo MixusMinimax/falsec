@@ -29,13 +29,14 @@ pub fn compile<Output: Write>(
         asm.write_bss(&config)
             .write_error_messages(program.strings)
             .write_print_string(&config)
+            .write_print_char(&config)
             .write_flush_stdout()
             .write_print_decimal(&config);
     }
 
     asm.add_instructions(
         SectionId::Data,
-        [Instruction::Label(Label::StdoutLen), Instruction::DW(0)],
+        [Instruction::Label(Label::StdoutLen), Instruction::DQ(0)],
     );
 
     asm.add_instructions(
@@ -47,6 +48,10 @@ pub fn compile<Output: Write>(
             Instruction::Label(Label::Named("main")),
         ],
     );
+    {
+        use crate::linux_x86_64_elf::boilerplate::Boilerplate;
+        asm.write_setup(&config);
+    }
     asm.call(Label::Lambda(program.main_id))
         .call(Label::FlushStdout)
         .exit(0);
@@ -338,7 +343,7 @@ pub fn compile<Output: Write>(
                     let id = string_id(&string);
                     asm.mov(Register::RDI, 1) // stdout
                         .lea(Register::RSI, Address::b(Label::StringLiteral(id)))
-                        .lea(Register::RDX, Label::StringLiteralLen(id))
+                        .mov(Register::RDX, Label::StringLiteralLen(id))
                         .call(Label::PrintString)
                 }
                 Command::WriteInt => asm
@@ -498,6 +503,10 @@ impl<'source> Assembly<'source> {
     fn lea(&mut self, dst: Register, src: impl Into<Operand<'source>>) -> &mut Self {
         self.ins(Instruction::Lea(dst, src.into()))
     }
+
+    fn com(&mut self, comment: impl Into<Cow<'source, str>>) -> &mut Self {
+        self.ins(Instruction::Comment(comment.into()))
+    }
 }
 
 #[allow(dead_code)]
@@ -524,6 +533,14 @@ impl<'source> Assembly<'source> {
         fn inc -> Inc;
 
         fn jmp -> Jmp;
+        /// Jump if greater
+        fn jg -> Jg;
+        /// Jump if not greater
+        fn jng -> Jng;
+        /// Jump if less
+        fn jl -> Jl;
+        /// Jump if not less
+        fn jnl -> Jnl;
         /// Jump if equal
         fn je -> Je;
         /// Jump if not equal
@@ -543,7 +560,6 @@ impl<'source> Assembly<'source> {
         fn setg -> SetG;
 
         /// pop from call stack. not to be confused with the data stack.
-        #[allow(dead_code)]
         fn cpop -> Pop;
         /// push to call stack. not to be confused with the data stack.
         fn cpush -> Push;
@@ -670,7 +686,7 @@ impl<'source> Assembly<'source> {
         self.cmp(Register::CUR_TYPE, value_type.into_id())
             .je(label)
             .mov(Register::RDI, 2) // stderr
-            .lea(Register::RSI, label_expected_type(value_type))
+            .lea(Register::RSI, Address::b(label_expected_type(value_type)))
             .mov(Register::RDX, label_expected_type_len(value_type))
             .call(Label::PrintString)
             .exit(1)
@@ -698,7 +714,11 @@ fn write_assembly(assembly: Assembly, mut output: impl Write) -> Result<(), Comp
                 && match instruction {
                     Instruction::CommentEndOfLine(..) => false,
                     Instruction::Equ(_) if previous_instruction_was_label => false,
-                    Instruction::DB(_) | Instruction::DW(_) | Instruction::Reserve(..)
+                    Instruction::DB(_)
+                    | Instruction::DW(_)
+                    | Instruction::DD(_)
+                    | Instruction::DQ(_)
+                    | Instruction::Reserve(..)
                         if previous_instruction_was_label && current_line.len() < 8 =>
                     {
                         false
@@ -712,6 +732,7 @@ fn write_assembly(assembly: Assembly, mut output: impl Write) -> Result<(), Comp
             }
             previous_instruction_was_label = matches!(instruction, Instruction::Label(..));
             match instruction {
+                Instruction::Align(align) => write!(current_line, "\talign {}", align)?,
                 Instruction::Add(dst, src) => write!(current_line, "\tadd {}, {}", dst, src)?,
                 Instruction::And(dst, src) => write!(current_line, "\tand {}, {}", dst, src)?,
                 Instruction::Call(operand) => write!(current_line, "\tcall {}", operand)?,
@@ -719,7 +740,9 @@ fn write_assembly(assembly: Assembly, mut output: impl Write) -> Result<(), Comp
                 Instruction::CMovE(dst, src) => write!(current_line, "\tcmove {}, {}", dst, src)?,
                 Instruction::CMovL(dst, src) => write!(current_line, "\tcmovl {}, {}", dst, src)?,
                 Instruction::Cmp(a, b) => write!(current_line, "\tcmp {}, {}", a, b)?,
-                Instruction::Comment(comment) => writeln!(output, "; {}", comment)?,
+                Instruction::Comment(comment) => {
+                    writeln!(output, "; {}", comment.replace('\n', "\\n"))?
+                }
                 Instruction::CommentEndOfLine(_) => todo!(),
                 Instruction::Cqo => write!(current_line, "\tcqo")?,
                 Instruction::DB(bytes) => {
@@ -753,6 +776,8 @@ fn write_assembly(assembly: Assembly, mut output: impl Write) -> Result<(), Comp
                     }
                 }
                 Instruction::DW(i) => write!(current_line, "\tDW {}", i)?,
+                Instruction::DD(i) => write!(current_line, "\tDD {}", i)?,
+                Instruction::DQ(i) => write!(current_line, "\tDQ {}", i)?,
                 Instruction::Dec(operand) => write!(current_line, "\tdec {}", operand)?,
                 Instruction::Equ(expr) => write!(current_line, "\tequ {}", expr)?,
                 Instruction::Global(symbol) => write!(current_line, "\tglobal {}", symbol)?,
@@ -760,6 +785,10 @@ fn write_assembly(assembly: Assembly, mut output: impl Write) -> Result<(), Comp
                 Instruction::Inc(operand) => write!(current_line, "\tinc {}", operand)?,
 
                 Instruction::Jmp(operand) => write!(current_line, "\tjmp {}", operand)?,
+                Instruction::Jg(operand) => write!(current_line, "\tjg {}", operand)?,
+                Instruction::Jng(operand) => write!(current_line, "\tjng {}", operand)?,
+                Instruction::Jl(operand) => write!(current_line, "\tjl {}", operand)?,
+                Instruction::Jnl(operand) => write!(current_line, "\tjnl {}", operand)?,
                 Instruction::Je(operand) => write!(current_line, "\tje {}", operand)?,
                 Instruction::Jne(operand) => write!(current_line, "\tjne {}", operand)?,
                 Instruction::Jz(operand) => write!(current_line, "\tjz {}", operand)?,
