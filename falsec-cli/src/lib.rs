@@ -3,7 +3,7 @@ use clap::{Parser, Subcommand, ValueEnum};
 use std::path::PathBuf;
 
 #[derive(Debug, Parser)]
-#[command(version, about, long_about = None, styles=styles())]
+#[command(name = "falsec", version, about, long_about = None, styles=styles())]
 pub struct Cli {
     pub name: Option<String>,
 

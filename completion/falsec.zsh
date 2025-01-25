@@ -1,8 +1,8 @@
-#compdef falsec-cli
+#compdef falsec
 
 autoload -U is-at-least
 
-_falsec-cli() {
+_falsec() {
     typeset -A opt_args
     typeset -a _arguments_options
     local ret=1
@@ -24,24 +24,16 @@ _falsec-cli() {
 '-V[Print version]' \
 '--version[Print version]' \
 '::name:_default' \
-":: :_falsec-cli_commands" \
-"*::: :->falsec-cli" \
+":: :_falsec_commands" \
+"*::: :->falsec" \
 && ret=0
     case $state in
-    (falsec-cli)
+    (falsec)
         words=($line[2] "${words[@]}")
         (( CURRENT += 1 ))
-        curcontext="${curcontext%:*:*}:falsec-cli-command-$line[2]:"
+        curcontext="${curcontext%:*:*}:falsec-command-$line[2]:"
         case $line[2] in
-            (test)
-_arguments "${_arguments_options[@]}" : \
-'-l[lists test values]' \
-'--list[lists test values]' \
-'-h[Print help]' \
-'--help[Print help]' \
-&& ret=0
-;;
-(run)
+            (run)
 _arguments "${_arguments_options[@]}" : \
 '--type-safety=[]:TYPE:((none\:"No type safety checks are performed"
 lambda\:"When trying to execute a lambda, make sure that the popped value is a lambda"
@@ -60,6 +52,9 @@ _arguments "${_arguments_options[@]}" : \
 lambda\:"When trying to execute a lambda, make sure that the popped value is a lambda"
 lambda-and-var\:"Include all checks from \[TypeSafety\:\:Lambda\], and make sure that when storing or loading a variable, the popped value is a variable name"
 full\:"Include all checks from \[TypeSafety\:\:LambdaAndVar\], and ensure that only integers can be used for arithmetic operations"))' \
+'--dump-asm=[The path to the intermediary assembly]:FILE:_default' \
+'-o+[The path to the compiled FALSE program]:FILE:_default' \
+'--out=[The path to the compiled FALSE program]:FILE:_default' \
 '-h[Print help (see more with '\''--help'\'')]' \
 '--help[Print help (see more with '\''--help'\'')]' \
 '-V[Print version]' \
@@ -69,7 +64,7 @@ full\:"Include all checks from \[TypeSafety\:\:LambdaAndVar\], and ensure that o
 ;;
 (help)
 _arguments "${_arguments_options[@]}" : \
-":: :_falsec-cli__help_commands" \
+":: :_falsec__help_commands" \
 "*::: :->help" \
 && ret=0
 
@@ -77,13 +72,9 @@ _arguments "${_arguments_options[@]}" : \
     (help)
         words=($line[1] "${words[@]}")
         (( CURRENT += 1 ))
-        curcontext="${curcontext%:*:*}:falsec-cli-help-command-$line[1]:"
+        curcontext="${curcontext%:*:*}:falsec-help-command-$line[1]:"
         case $line[1] in
-            (test)
-_arguments "${_arguments_options[@]}" : \
-&& ret=0
-;;
-(run)
+            (run)
 _arguments "${_arguments_options[@]}" : \
 && ret=0
 ;;
@@ -104,64 +95,52 @@ esac
 esac
 }
 
-(( $+functions[_falsec-cli_commands] )) ||
-_falsec-cli_commands() {
+(( $+functions[_falsec_commands] )) ||
+_falsec_commands() {
     local commands; commands=(
-'test:does testing things' \
 'run:Execute a FALSE program' \
 'compile:Compile a FALSE program' \
 'help:Print this message or the help of the given subcommand(s)' \
     )
-    _describe -t commands 'falsec-cli commands' commands "$@"
+    _describe -t commands 'falsec commands' commands "$@"
 }
-(( $+functions[_falsec-cli__compile_commands] )) ||
-_falsec-cli__compile_commands() {
+(( $+functions[_falsec__compile_commands] )) ||
+_falsec__compile_commands() {
     local commands; commands=()
-    _describe -t commands 'falsec-cli compile commands' commands "$@"
+    _describe -t commands 'falsec compile commands' commands "$@"
 }
-(( $+functions[_falsec-cli__help_commands] )) ||
-_falsec-cli__help_commands() {
+(( $+functions[_falsec__help_commands] )) ||
+_falsec__help_commands() {
     local commands; commands=(
-'test:does testing things' \
 'run:Execute a FALSE program' \
 'compile:Compile a FALSE program' \
 'help:Print this message or the help of the given subcommand(s)' \
     )
-    _describe -t commands 'falsec-cli help commands' commands "$@"
+    _describe -t commands 'falsec help commands' commands "$@"
 }
-(( $+functions[_falsec-cli__help__compile_commands] )) ||
-_falsec-cli__help__compile_commands() {
+(( $+functions[_falsec__help__compile_commands] )) ||
+_falsec__help__compile_commands() {
     local commands; commands=()
-    _describe -t commands 'falsec-cli help compile commands' commands "$@"
+    _describe -t commands 'falsec help compile commands' commands "$@"
 }
-(( $+functions[_falsec-cli__help__help_commands] )) ||
-_falsec-cli__help__help_commands() {
+(( $+functions[_falsec__help__help_commands] )) ||
+_falsec__help__help_commands() {
     local commands; commands=()
-    _describe -t commands 'falsec-cli help help commands' commands "$@"
+    _describe -t commands 'falsec help help commands' commands "$@"
 }
-(( $+functions[_falsec-cli__help__run_commands] )) ||
-_falsec-cli__help__run_commands() {
+(( $+functions[_falsec__help__run_commands] )) ||
+_falsec__help__run_commands() {
     local commands; commands=()
-    _describe -t commands 'falsec-cli help run commands' commands "$@"
+    _describe -t commands 'falsec help run commands' commands "$@"
 }
-(( $+functions[_falsec-cli__help__test_commands] )) ||
-_falsec-cli__help__test_commands() {
+(( $+functions[_falsec__run_commands] )) ||
+_falsec__run_commands() {
     local commands; commands=()
-    _describe -t commands 'falsec-cli help test commands' commands "$@"
-}
-(( $+functions[_falsec-cli__run_commands] )) ||
-_falsec-cli__run_commands() {
-    local commands; commands=()
-    _describe -t commands 'falsec-cli run commands' commands "$@"
-}
-(( $+functions[_falsec-cli__test_commands] )) ||
-_falsec-cli__test_commands() {
-    local commands; commands=()
-    _describe -t commands 'falsec-cli test commands' commands "$@"
+    _describe -t commands 'falsec run commands' commands "$@"
 }
 
-if [ "$funcstack[1]" = "_falsec-cli" ]; then
-    _falsec-cli "$@"
+if [ "$funcstack[1]" = "_falsec" ]; then
+    _falsec "$@"
 else
-    compdef _falsec-cli falsec-cli
+    compdef _falsec falsec
 fi

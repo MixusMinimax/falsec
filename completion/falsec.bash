@@ -1,4 +1,4 @@
-_falsec-cli() {
+_falsec() {
     local i cur prev opts cmd
     COMPREPLY=()
     cur="${COMP_WORDS[COMP_CWORD]}"
@@ -10,31 +10,25 @@ _falsec-cli() {
     do
         case "${cmd},${i}" in
             ",$1")
-                cmd="falsec__cli"
+                cmd="falsec"
                 ;;
-            falsec__cli,compile)
-                cmd="falsec__cli__compile"
+            falsec,compile)
+                cmd="falsec__compile"
                 ;;
-            falsec__cli,help)
-                cmd="falsec__cli__help"
+            falsec,help)
+                cmd="falsec__help"
                 ;;
-            falsec__cli,run)
-                cmd="falsec__cli__run"
+            falsec,run)
+                cmd="falsec__run"
                 ;;
-            falsec__cli,test)
-                cmd="falsec__cli__test"
+            falsec__help,compile)
+                cmd="falsec__help__compile"
                 ;;
-            falsec__cli__help,compile)
-                cmd="falsec__cli__help__compile"
+            falsec__help,help)
+                cmd="falsec__help__help"
                 ;;
-            falsec__cli__help,help)
-                cmd="falsec__cli__help__help"
-                ;;
-            falsec__cli__help,run)
-                cmd="falsec__cli__help__run"
-                ;;
-            falsec__cli__help,test)
-                cmd="falsec__cli__help__test"
+            falsec__help,run)
+                cmd="falsec__help__run"
                 ;;
             *)
                 ;;
@@ -42,8 +36,8 @@ _falsec-cli() {
     done
 
     case "${cmd}" in
-        falsec__cli)
-            opts="-c -d -h -V --config --debug --help --version [NAME] test run compile help"
+        falsec)
+            opts="-c -d -h -V --config --debug --help --version [NAME] run compile help"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 1 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
                 return 0
@@ -64,7 +58,93 @@ _falsec-cli() {
             COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
             return 0
             ;;
-        falsec__cli__compile)
+        falsec__compile)
+            opts="-o -h -V --type-safety --dump-asm --out --help --version <PROGRAM>"
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                --type-safety)
+                    COMPREPLY=($(compgen -W "none lambda lambda-and-var full" -- "${cur}"))
+                    return 0
+                    ;;
+                --dump-asm)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                --out)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                -o)
+                    COMPREPLY=($(compgen -f "${cur}"))
+                    return 0
+                    ;;
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        falsec__help)
+            opts="run compile help"
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        falsec__help__compile)
+            opts=""
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        falsec__help__help)
+            opts=""
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        falsec__help__run)
+            opts=""
+            if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
+                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+                return 0
+            fi
+            case "${prev}" in
+                *)
+                    COMPREPLY=()
+                    ;;
+            esac
+            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
+            return 0
+            ;;
+        falsec__run)
             opts="-h -V --type-safety --help --version <PROGRAM>"
             if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
                 COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
@@ -75,108 +155,6 @@ _falsec-cli() {
                     COMPREPLY=($(compgen -W "none lambda lambda-and-var full" -- "${cur}"))
                     return 0
                     ;;
-                *)
-                    COMPREPLY=()
-                    ;;
-            esac
-            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
-            return 0
-            ;;
-        falsec__cli__help)
-            opts="test run compile help"
-            if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
-                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
-                return 0
-            fi
-            case "${prev}" in
-                *)
-                    COMPREPLY=()
-                    ;;
-            esac
-            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
-            return 0
-            ;;
-        falsec__cli__help__compile)
-            opts=""
-            if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
-                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
-                return 0
-            fi
-            case "${prev}" in
-                *)
-                    COMPREPLY=()
-                    ;;
-            esac
-            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
-            return 0
-            ;;
-        falsec__cli__help__help)
-            opts=""
-            if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
-                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
-                return 0
-            fi
-            case "${prev}" in
-                *)
-                    COMPREPLY=()
-                    ;;
-            esac
-            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
-            return 0
-            ;;
-        falsec__cli__help__run)
-            opts=""
-            if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
-                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
-                return 0
-            fi
-            case "${prev}" in
-                *)
-                    COMPREPLY=()
-                    ;;
-            esac
-            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
-            return 0
-            ;;
-        falsec__cli__help__test)
-            opts=""
-            if [[ ${cur} == -* || ${COMP_CWORD} -eq 3 ]] ; then
-                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
-                return 0
-            fi
-            case "${prev}" in
-                *)
-                    COMPREPLY=()
-                    ;;
-            esac
-            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
-            return 0
-            ;;
-        falsec__cli__run)
-            opts="-h -V --type-safety --help --version <PROGRAM>"
-            if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
-                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
-                return 0
-            fi
-            case "${prev}" in
-                --type-safety)
-                    COMPREPLY=($(compgen -W "none lambda lambda-and-var full" -- "${cur}"))
-                    return 0
-                    ;;
-                *)
-                    COMPREPLY=()
-                    ;;
-            esac
-            COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
-            return 0
-            ;;
-        falsec__cli__test)
-            opts="-l -h --list --help"
-            if [[ ${cur} == -* || ${COMP_CWORD} -eq 2 ]] ; then
-                COMPREPLY=( $(compgen -W "${opts}" -- "${cur}") )
-                return 0
-            fi
-            case "${prev}" in
                 *)
                     COMPREPLY=()
                     ;;
@@ -188,7 +166,7 @@ _falsec-cli() {
 }
 
 if [[ "${BASH_VERSINFO[0]}" -eq 4 && "${BASH_VERSINFO[1]}" -ge 4 || "${BASH_VERSINFO[0]}" -gt 4 ]]; then
-    complete -F _falsec-cli -o nosort -o bashdefault -o default falsec-cli
+    complete -F _falsec -o nosort -o bashdefault -o default falsec
 else
-    complete -F _falsec-cli -o bashdefault -o default falsec-cli
+    complete -F _falsec -o bashdefault -o default falsec
 fi
