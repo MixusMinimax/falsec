@@ -1,5 +1,5 @@
 use clap::builder::Styles;
-use clap::{Parser, Subcommand, ValueEnum};
+use clap::{Parser, Subcommand, ValueEnum, ValueHint};
 use std::path::PathBuf;
 
 #[derive(Debug, Parser)]
@@ -7,7 +7,7 @@ use std::path::PathBuf;
 pub struct Cli {
     pub name: Option<String>,
 
-    #[arg(short, long, value_name = "FILE")]
+    #[arg(short, long, value_name = "FILE", value_hint = ValueHint::FilePath)]
     pub config: Option<PathBuf>,
 
     #[arg(short, long, action = clap::ArgAction::Count)]
@@ -39,17 +39,18 @@ pub enum TypeSafety {
 
 mod run {
     use crate::TypeSafety;
-    use clap::Parser;
+    use clap::{Args, ValueHint};
     use std::ffi::OsString;
 
     /// Execute a FALSE program
-    #[derive(Debug, Parser)]
+    #[derive(Debug, Args)]
     #[command(version, about, long_about = None)]
     pub struct Run {
         #[arg(long, require_equals = true, value_name = "TYPE", value_enum)]
         pub type_safety: Option<TypeSafety>,
 
         /// The path to the FALSE program to execute
+        #[arg(value_name = "FILE", value_hint = ValueHint::FilePath)]
         pub program: OsString,
     }
 }
@@ -58,25 +59,26 @@ pub use run::Run;
 
 mod compile {
     use crate::TypeSafety;
-    use clap::Parser;
+    use clap::{Args, ValueHint};
     use std::ffi::OsString;
 
     /// Compile a FALSE program
-    #[derive(Debug, Parser)]
+    #[derive(Debug, Args)]
     #[command(version, about, long_about = None)]
     pub struct Compile {
         #[arg(long, require_equals = true, value_name = "TYPE", value_enum)]
         pub type_safety: Option<TypeSafety>,
 
         /// The path to the intermediary assembly
-        #[arg(long, value_name = "FILE")]
+        #[arg(long, value_name = "FILE", value_hint = ValueHint::FilePath)]
         pub dump_asm: Option<OsString>,
 
         /// The path to the compiled FALSE program
-        #[arg(short, long, value_name = "FILE")]
+        #[arg(short, long, value_name = "FILE", value_hint = ValueHint::FilePath)]
         pub out: Option<OsString>,
 
         /// The path to the FALSE program to execute
+        #[arg(value_name = "FILE", value_hint = ValueHint::FilePath)]
         pub program: OsString,
     }
 }

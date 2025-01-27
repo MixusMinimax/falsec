@@ -43,7 +43,7 @@ full\:"Include all checks from \[TypeSafety\:\:LambdaAndVar\], and ensure that o
 '--help[Print help (see more with '\''--help'\'')]' \
 '-V[Print version]' \
 '--version[Print version]' \
-':program -- The path to the FALSE program to execute:_default' \
+':program -- The path to the FALSE program to execute:_files' \
 && ret=0
 ;;
 (compile)
@@ -52,14 +52,14 @@ _arguments "${_arguments_options[@]}" : \
 lambda\:"When trying to execute a lambda, make sure that the popped value is a lambda"
 lambda-and-var\:"Include all checks from \[TypeSafety\:\:Lambda\], and make sure that when storing or loading a variable, the popped value is a variable name"
 full\:"Include all checks from \[TypeSafety\:\:LambdaAndVar\], and ensure that only integers can be used for arithmetic operations"))' \
-'--dump-asm=[The path to the intermediary assembly]:FILE:_default' \
-'-o+[The path to the compiled FALSE program]:FILE:_default' \
-'--out=[The path to the compiled FALSE program]:FILE:_default' \
+'--dump-asm=[The path to the intermediary assembly]:FILE:_files' \
+'-o+[The path to the compiled FALSE program]:FILE:_files' \
+'--out=[The path to the compiled FALSE program]:FILE:_files' \
 '-h[Print help (see more with '\''--help'\'')]' \
 '--help[Print help (see more with '\''--help'\'')]' \
 '-V[Print version]' \
 '--version[Print version]' \
-':program -- The path to the FALSE program to execute:_default' \
+':program -- The path to the FALSE program to execute:_files' \
 && ret=0
 ;;
 (help)

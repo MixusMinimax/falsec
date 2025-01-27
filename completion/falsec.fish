@@ -41,8 +41,8 @@ complete -c falsec -n "__fish_falsec_using_subcommand compile" -l type-safety -r
 lambda\t'When trying to execute a lambda, make sure that the popped value is a lambda'
 lambda-and-var\t'Include all checks from [TypeSafety::Lambda], and make sure that when storing or loading a variable, the popped value is a variable name'
 full\t'Include all checks from [TypeSafety::LambdaAndVar], and ensure that only integers can be used for arithmetic operations'"
-complete -c falsec -n "__fish_falsec_using_subcommand compile" -l dump-asm -d 'The path to the intermediary assembly' -r
-complete -c falsec -n "__fish_falsec_using_subcommand compile" -s o -l out -d 'The path to the compiled FALSE program' -r
+complete -c falsec -n "__fish_falsec_using_subcommand compile" -l dump-asm -d 'The path to the intermediary assembly' -r -F
+complete -c falsec -n "__fish_falsec_using_subcommand compile" -s o -l out -d 'The path to the compiled FALSE program' -r -F
 complete -c falsec -n "__fish_falsec_using_subcommand compile" -s h -l help -d 'Print help (see more with \'--help\')'
 complete -c falsec -n "__fish_falsec_using_subcommand compile" -s V -l version -d 'Print version'
 complete -c falsec -n "__fish_falsec_using_subcommand help; and not __fish_seen_subcommand_from run compile help" -f -a "run" -d 'Execute a FALSE program'

@@ -25,5 +25,6 @@ fn main() {
     };
 
     let name = command.get_name().to_string();
+    println!("Generating completions for {}", name);
     generate(args.generator, &mut command, name, &mut out);
 }
