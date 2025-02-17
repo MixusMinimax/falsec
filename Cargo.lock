@@ -198,7 +198,7 @@ dependencies = [
 
 [[package]]
 name = "falsec-cli"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "anstyle",
  "clap",
@@ -217,7 +217,7 @@ dependencies = [
 
 [[package]]
 name = "falsec-compiler"
-version = "0.1.0"
+version = "0.1.2"
 dependencies = [
  "falsec-types",
  "falsec-util",
