@@ -81,6 +81,5 @@ mod tests {
         })
         .unwrap();
         assert_ne!(output.len(), 0);
-        std::fs::write("/home/maxib/sample_program", &output).unwrap();
     }
 }
