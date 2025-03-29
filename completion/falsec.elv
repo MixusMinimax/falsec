@@ -18,10 +18,10 @@ set edit:completion:arg-completer[falsec] = {|@words|
     }
     var completions = [
         &'falsec'= {
-            cand -c 'c'
-            cand --config 'config'
-            cand -d 'd'
-            cand --debug 'debug'
+            cand -c 'The path to the configuration file'
+            cand --config 'The path to the configuration file'
+            cand -d 'Enable debug output'
+            cand --debug 'Enable debug output'
             cand -h 'Print help'
             cand --help 'Print help'
             cand -V 'Print version'

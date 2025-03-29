@@ -7,9 +7,11 @@ use std::path::PathBuf;
 pub struct Cli {
     pub name: Option<String>,
 
+    /// The path to the configuration file
     #[arg(short, long, value_name = "FILE", value_hint = ValueHint::FilePath)]
     pub config: Option<PathBuf>,
 
+    /// Enable debug output
     #[arg(short, long, action = clap::ArgAction::Count)]
     pub debug: u8,
 

@@ -21,10 +21,10 @@ Register-ArgumentCompleter -Native -CommandName 'falsec' -ScriptBlock {
 
     $completions = @(switch ($command) {
         'falsec' {
-            [CompletionResult]::new('-c', '-c', [CompletionResultType]::ParameterName, 'c')
-            [CompletionResult]::new('--config', '--config', [CompletionResultType]::ParameterName, 'config')
-            [CompletionResult]::new('-d', '-d', [CompletionResultType]::ParameterName, 'd')
-            [CompletionResult]::new('--debug', '--debug', [CompletionResultType]::ParameterName, 'debug')
+            [CompletionResult]::new('-c', '-c', [CompletionResultType]::ParameterName, 'The path to the configuration file')
+            [CompletionResult]::new('--config', '--config', [CompletionResultType]::ParameterName, 'The path to the configuration file')
+            [CompletionResult]::new('-d', '-d', [CompletionResultType]::ParameterName, 'Enable debug output')
+            [CompletionResult]::new('--debug', '--debug', [CompletionResultType]::ParameterName, 'Enable debug output')
             [CompletionResult]::new('-h', '-h', [CompletionResultType]::ParameterName, 'Print help')
             [CompletionResult]::new('--help', '--help', [CompletionResultType]::ParameterName, 'Print help')
             [CompletionResult]::new('-V', '-V ', [CompletionResultType]::ParameterName, 'Print version')

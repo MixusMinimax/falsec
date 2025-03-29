@@ -24,8 +24,8 @@ function __fish_falsec_using_subcommand
 	contains -- $cmd[1] $argv
 end
 
-complete -c falsec -n "__fish_falsec_needs_command" -s c -l config -r -F
-complete -c falsec -n "__fish_falsec_needs_command" -s d -l debug
+complete -c falsec -n "__fish_falsec_needs_command" -s c -l config -d 'The path to the configuration file' -r -F
+complete -c falsec -n "__fish_falsec_needs_command" -s d -l debug -d 'Enable debug output'
 complete -c falsec -n "__fish_falsec_needs_command" -s h -l help -d 'Print help'
 complete -c falsec -n "__fish_falsec_needs_command" -s V -l version -d 'Print version'
 complete -c falsec -n "__fish_falsec_needs_command" -a "run" -d 'Execute a FALSE program'

@@ -15,10 +15,10 @@ _falsec() {
 
     local context curcontext="$curcontext" state line
     _arguments "${_arguments_options[@]}" : \
-'-c+[]:FILE:_files' \
-'--config=[]:FILE:_files' \
-'*-d[]' \
-'*--debug[]' \
+'-c+[The path to the configuration file]:FILE:_files' \
+'--config=[The path to the configuration file]:FILE:_files' \
+'*-d[Enable debug output]' \
+'*--debug[Enable debug output]' \
 '-h[Print help]' \
 '--help[Print help]' \
 '-V[Print version]' \
