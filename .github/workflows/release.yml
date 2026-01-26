@@ -15,11 +15,6 @@ jobs:
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.x"
-
       - name: Build binary
         run: cargo build --release
 
@@ -42,11 +37,15 @@ jobs:
           echo "VERSION=$VERSION" >> $GITHUB_ENV
 
       - name: Create tarball
-        run: tar -czf falsec-bin-${{ env.VERSION }}-x86_64.tar.gz -C dist .
+        run: |
+          cd dist
+          tar -czf falsec-bin-${{ env.VERSION }}-x86_64.tar.gz *
+          mv falsec-bin-${{ env.VERSION }}-x86_64.tar.gz ..
+          cd ..
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b
         with:
           tag_name: ${{ github.ref_name }}
-          name: Release ${{ github.ref_name }}
+          name: Version ${{ env.VERSION }}
           files: falsec-bin-${{ env.VERSION }}-x86_64.tar.gz
