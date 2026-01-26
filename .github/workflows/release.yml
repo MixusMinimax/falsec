@@ -1,0 +1,46 @@
+name: Release
+
+on:
+  push:
+    tags: [ 'v*' ]
+  workflow_dispatch:
+
+jobs:
+  release:
+    runs-on: ubuntu-22.04
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: Build binary
+        run: cargo build --release
+
+      - name: Stage release files
+        run: |
+          mkdir -p dist/bin
+          mkdir -p dist/completions
+
+          cp target/release/falsec dist/bin/
+          cp completions/* dist/completions/
+          cp LICENSE dist/
+
+      - name: Derive version
+        run: |
+          VERSION="${{ github.ref_name }}"
+          VERSION="${VERSION#v}"
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+
+      - name: Create tarball
+        run: tar -czf falsec-bin-${{ env.VERSION }}-x86_64.tar.gz -C dist .
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: Release ${{ github.ref_name }}
+          files: falsec-bin-${{ env.VERSION }}-x86_64.tar.gz
