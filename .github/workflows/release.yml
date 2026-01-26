@@ -20,15 +20,15 @@ jobs:
 
       - name: Stage release files
         run: |
-          mkdir -p dist/bin
-          mkdir -p dist/completion
+          mkdir -p falsec-bin-${{ env.VERSION }}/bin
+          mkdir -p falsec-bin-${{ env.VERSION }}/completion
 
-          cp target/release/falsec dist/bin/
-          cp completion/falsec.bash dist/completion/
-          cp completion/falsec.elv dist/completion/
-          cp completion/falsec.fish dist/completion/
-          cp completion/falsec.zsh dist/completion/
-          cp LICENSE dist/
+          cp target/release/falsec falsec-bin-${{ env.VERSION }}/bin/
+          cp completion/falsec.bash falsec-bin-${{ env.VERSION }}/completion/
+          cp completion/falsec.elv falsec-bin-${{ env.VERSION }}/completion/
+          cp completion/falsec.fish falsec-bin-${{ env.VERSION }}/completion/
+          cp completion/falsec.zsh falsec-bin-${{ env.VERSION }}/completion/
+          cp LICENSE falsec-bin-${{ env.VERSION }}/
 
       - name: Derive version
         run: |
@@ -38,10 +38,7 @@ jobs:
 
       - name: Create tarball
         run: |
-          cd dist
-          tar -czf falsec-bin-${{ env.VERSION }}-x86_64.tar.gz *
-          mv falsec-bin-${{ env.VERSION }}-x86_64.tar.gz ..
-          cd ..
+          tar -czf falsec-bin-${{ env.VERSION }}-x86_64.tar.gz falsec-bin-${{ env.VERSION }}
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b
