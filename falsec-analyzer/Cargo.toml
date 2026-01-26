@@ -1,8 +1,8 @@
 [package]
 name = "falsec-analyzer"
-version = "0.1.0"
-edition = "2021"
+version = "0.1.1"
+edition = "2024"
 
 [dependencies]
-falsec-types = { version = "0.1.0", path = "../falsec-types" }
-falsec-util = { version = "0.1.0", path = "../falsec-util" }
+falsec-types = { version = "0.1.1", path = "../falsec-types" }
+falsec-util = { version = "0.1.1", path = "../falsec-util" }

@@ -2,7 +2,7 @@ use crate::linux_x86_64_elf::asm::{
     Address, Instruction, Label, Register, RegisterSize, SectionId,
 };
 
-use crate::linux_x86_64_elf::{label_expected_type, label_expected_type_len, Assembly, ValueType};
+use crate::linux_x86_64_elf::{Assembly, ValueType, label_expected_type, label_expected_type_len};
 use falsec_types::{Config, TypeSafety};
 use std::borrow::Cow;
 use std::collections::HashMap;
@@ -90,7 +90,7 @@ impl<'source> Boilerplate<'source> for Assembly<'source> {
     }
 
     fn write_setup(&mut self, config: &Config) -> &mut Self {
-        if config.stack_size.0 % 8 != 0 {
+        if !config.stack_size.0.is_multiple_of(8) {
             panic!("Stack size must be a multiple of 8");
         }
 
