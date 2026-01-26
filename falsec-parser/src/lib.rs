@@ -14,7 +14,7 @@ struct PosChars<'source> {
 }
 
 impl<'source> PosChars<'source> {
-    pub fn new(source: &'source str, config: Config) -> Self {
+    fn new(source: &'source str, config: Config) -> Self {
         Self {
             pos: Pos::at_start(),
             chars: source.chars().peekable(),
@@ -22,8 +22,18 @@ impl<'source> PosChars<'source> {
         }
     }
 
-    pub fn peek(&mut self) -> Option<&<Chars<'source> as Iterator>::Item> {
+    fn peek(&mut self) -> Option<&<Chars<'source> as Iterator>::Item> {
         self.chars.peek()
+    }
+
+    fn consume_whitespace(&mut self) {
+        while self
+            .peek()
+            .map(|c| c.is_ascii_whitespace())
+            .unwrap_or_default()
+        {
+            self.next();
+        }
     }
 }
 
@@ -58,14 +68,7 @@ impl<'source> Parser<'source> {
     }
 
     pub fn parse_command(&mut self) -> Result<(Command<'source>, Span<'source>), ParseError> {
-        while self
-            .chars
-            .peek()
-            .map(|c| c.is_ascii_whitespace())
-            .unwrap_or_default()
-        {
-            self.chars.next();
-        }
+        self.chars.consume_whitespace();
         let pos = self.pos();
         let command = match self
             .chars
@@ -207,14 +210,16 @@ impl<'source> Parser<'source> {
             }
             c => return Err(ParseError::unexpected_token(pos, c)),
         };
-        Ok((
+        let result = Ok((
             command,
             Span {
                 start: pos,
                 end: self.pos(),
                 source: &self.source[pos.offset..self.pos().offset],
             },
-        ))
+        ));
+        self.chars.consume_whitespace();
+        result
     }
 }
 
@@ -249,10 +254,11 @@ mod tests {
     #[test]
     fn single_int_literal() {
         let code = "123";
-        let commands: Result<Vec<_>, _> = Parser::new(code, test_config()).collect();
-        assert!(commands.is_ok());
+        let commands = Parser::new(code, test_config())
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap();
         assert_eq!(
-            commands.unwrap(),
+            commands,
             [(
                 Command::IntLiteral(123),
                 Span::new(Pos::new(0, 1, 1), Pos::new(3, 1, 4), "123")
@@ -261,12 +267,33 @@ mod tests {
     }
 
     #[test]
+    fn whitespaces() {
+        let code = r###"
+            [
+                123
+            ]  !
+        "###;
+        let commands = Parser::new(code, test_config())
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap();
+        let commands: Vec<_> = commands.into_iter().map(|(com, _)| com).collect();
+        assert!(matches!(
+            &commands[..],
+            [
+                Command::Lambda(LambdaCommand::LambdaDefinition(c)),
+                Command::Exec,
+            ] if matches!(c[..], [(Command::IntLiteral(123), _)])
+        ));
+    }
+
+    #[test]
     fn multiple_int_literals() {
         let code = " 123 2  5  ";
-        let commands: Result<Vec<_>, _> = Parser::new(code, test_config()).collect();
-        assert!(commands.is_ok());
+        let commands = Parser::new(code, test_config())
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap();
         assert_eq!(
-            commands.unwrap(),
+            commands,
             [
                 (
                     Command::IntLiteral(123),
@@ -287,10 +314,11 @@ mod tests {
     #[test]
     fn int_literal_linefeed() {
         let code = "\t123\n3\n\t 6\n";
-        let commands: Result<Vec<_>, _> = Parser::new(code, test_config()).collect();
-        assert!(commands.is_ok());
+        let commands = Parser::new(code, test_config())
+            .collect::<Result<Vec<_>, _>>()
+            .unwrap();
         assert_eq!(
-            commands.unwrap(),
+            commands,
             [
                 (
                     Command::IntLiteral(123),
@@ -311,15 +339,16 @@ mod tests {
     #[test]
     fn string_escape_sequences() {
         let code = r###"0_"asd\n\r\t asd \\\"asd"#"###;
-        let commands: Result<Vec<_>, _> = Parser::new(
+        let commands = Parser::new(
             code,
             Config {
                 string_escape_sequences: true,
                 ..Default::default()
             },
         )
-        .collect();
-        let commands: Vec<_> = commands.unwrap().into_iter().map(|(com, _)| com).collect();
+        .collect::<Result<Vec<_>, _>>()
+        .unwrap();
+        let commands: Vec<_> = commands.into_iter().map(|(com, _)| com).collect();
         assert!(matches!(
             commands[..],
             [
@@ -359,7 +388,7 @@ mod tests {
             "a;." + "b;." = "."
             "
         "###;
-        let commands: Result<Vec<_>, _> = Parser::new(
+        let commands = Parser::new(
             code,
             Config {
                 tab_width: 2.into(),
@@ -368,9 +397,9 @@ mod tests {
                 ..Default::default()
             },
         )
-        .collect();
-        assert!(commands.is_ok());
-        let without_spans: Vec<_> = commands.unwrap().into_iter().map(|(com, _)| com).collect();
+        .collect::<Result<Vec<_>, _>>()
+        .unwrap();
+        let without_spans: Vec<_> = commands.into_iter().map(|(com, _)| com).collect();
         // assert_matches is experimental and requires nightly
         assert!(matches!(
             without_spans[..],

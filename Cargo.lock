@@ -151,7 +151,7 @@ dependencies = [
 
 [[package]]
 name = "falsec-cli"
-version = "0.1.3"
+version = "0.1.4"
 dependencies = [
  "anstyle",
  "clap",
@@ -186,7 +186,7 @@ dependencies = [
 
 [[package]]
 name = "falsec-parser"
-version = "0.1.1"
+version = "0.1.2"
 dependencies = [
  "falsec-types",
 ]
