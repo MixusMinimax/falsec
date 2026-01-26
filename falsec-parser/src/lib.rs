@@ -1,8 +1,8 @@
 mod error;
 
 use crate::error::{ParseError, ParseErrorKind};
-use falsec_types::source::{Command, LambdaCommand, Pos, Span};
 use falsec_types::Config;
+use falsec_types::source::{Command, LambdaCommand, Pos, Span};
 use std::borrow::Cow;
 use std::iter::Peekable;
 use std::str::Chars;
@@ -235,8 +235,8 @@ impl<'source> Iterator for Parser<'source> {
 #[cfg(test)]
 mod tests {
     use crate::Parser;
-    use falsec_types::source::{Command, LambdaCommand, Pos, Span};
     use falsec_types::Config;
+    use falsec_types::source::{Command, LambdaCommand, Pos, Span};
     use std::borrow::Cow;
 
     fn test_config() -> Config {

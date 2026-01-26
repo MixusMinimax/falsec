@@ -238,7 +238,7 @@ pub fn compile<Output: Write>(
                     .neg(Register::RAX)
                     .replace(Register::RAX, ValueType::Number),
                 Command::Lambda(LambdaCommand::LambdaDefinition(..)) => {
-                    return Err(CompilerError::lambda_definition_not_allowed(span.start))
+                    return Err(CompilerError::lambda_definition_not_allowed(span.start));
                 }
                 Command::Lambda(LambdaCommand::LambdaReference(id)) => asm
                     .lea(Register::RAX, Address::b(Label::Lambda(id)))

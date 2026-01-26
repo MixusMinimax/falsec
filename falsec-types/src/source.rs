@@ -171,8 +171,8 @@ pub enum LambdaCommand<'source> {
 
 #[cfg(test)]
 mod tests {
-    use crate::source::Pos;
     use crate::Config;
+    use crate::source::Pos;
 
     #[test]
     fn pos_advance() {

@@ -1,6 +1,6 @@
 use crate::error::AnalyzerError;
-use falsec_types::source::{Command, Lambda, LambdaCommand, Program, Span};
 use falsec_types::Config;
+use falsec_types::source::{Command, Lambda, LambdaCommand, Program, Span};
 use falsec_util::string_id;
 use std::borrow::Cow;
 use std::collections::HashMap;

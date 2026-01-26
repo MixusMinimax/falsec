@@ -9,7 +9,7 @@ path = "src/bin/generate_json_schema.rs"
 required-features = ["schema"]
 
 [dependencies.schemars]
-version = "0.8"
+version = "1.2.0"
 optional = true
 features = ["derive"]
 

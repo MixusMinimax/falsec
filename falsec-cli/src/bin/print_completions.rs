@@ -1,9 +1,9 @@
 use clap::CommandFactory;
 use clap::Parser;
-use clap_complete::{generate, Shell};
+use clap_complete::{Shell, generate};
 use falsec_cli::Cli;
 use std::fs::File;
-use std::io::{stdout, Write};
+use std::io::{Write, stdout};
 use std::path::PathBuf;
 
 #[derive(Debug, Parser)]

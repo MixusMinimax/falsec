@@ -1,6 +1,6 @@
 use crate::error::CompilerError;
-use falsec_types::source::Program;
 use falsec_types::Config;
+use falsec_types::source::Program;
 use std::any::Any;
 use std::fmt::Debug;
 use std::io;
@@ -59,7 +59,7 @@ pub fn compile<Output: Write>(
 
 #[cfg(test)]
 mod tests {
-    use crate::{compile, CompileRequest};
+    use crate::{CompileRequest, compile};
     use falsec_types::source::Program;
     use std::collections::HashMap;
 

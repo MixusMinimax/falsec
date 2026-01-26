@@ -418,7 +418,7 @@ impl<Input: Read, Output: Write> Interpreter<'_, Input, Output> {
                                 state.current_pos,
                                 state.current_lambda_id,
                                 state.program_counter,
-                            ))
+                            ));
                         }
                     };
                 }

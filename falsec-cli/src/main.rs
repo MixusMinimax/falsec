@@ -1,13 +1,13 @@
 use clap::Parser;
 use falsec_cli::{Cli, Commands, Compile, Run, TypeSafety};
-use falsec_compiler::{compile, CompileRequest, Target};
-use falsec_types::source::Program;
+use falsec_compiler::{CompileRequest, Target, compile};
 use falsec_types::Config;
+use falsec_types::source::Program;
 use std::borrow::Cow;
 use std::cell::OnceCell;
 use std::ffi::{OsStr, OsString};
 use std::fs::File;
-use std::io::{stdin, stdout, Read, Write};
+use std::io::{Read, Write, stdin, stdout};
 use std::path::PathBuf;
 
 trait FromArg<T> {
