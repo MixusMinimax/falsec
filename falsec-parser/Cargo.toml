@@ -4,4 +4,4 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
-falsec-types = { path = "../falsec-types" }
+falsec-types = { version = "0.1.0", path = "../falsec-types" }
