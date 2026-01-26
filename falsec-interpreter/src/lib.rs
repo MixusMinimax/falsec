@@ -4,7 +4,7 @@ use crate::error::InterpreterError;
 use falsec_types::source::{Command, Lambda, LambdaCommand, Pos, Program, Span};
 use falsec_types::{Config, TypeSafety};
 use std::collections::HashMap;
-use std::io::{Read, Write};
+use std::io::{ErrorKind, Read, Write};
 #[cfg(test)]
 use std::{cell::RefCell, rc::Rc};
 
@@ -405,15 +405,22 @@ impl<Input: Read, Output: Write> Interpreter<'_, Input, Output> {
                 }
                 Command::ReadChar => {
                     let mut buf = [0];
-                    self.input.read_exact(&mut buf).map_err(|e| {
-                        InterpreterError::io_error(
-                            e,
-                            state.current_pos,
-                            state.current_lambda_id,
-                            state.program_counter,
-                        )
-                    })?;
-                    state.pushi(buf[0] as i64);
+                    match self.input.read_exact(&mut buf) {
+                        Ok(()) => {
+                            state.pushi(buf[0] as i64);
+                        }
+                        Err(e) if e.kind() == ErrorKind::UnexpectedEof => {
+                            state.pushi(-1);
+                        }
+                        Err(e) => {
+                            return Err(InterpreterError::io_error(
+                                e,
+                                state.current_pos,
+                                state.current_lambda_id,
+                                state.program_counter,
+                            ))
+                        }
+                    };
                 }
                 Command::WriteChar => {
                     let c = state.pop()?.into_integer(&self.config, &state)?;
@@ -935,5 +942,32 @@ mod tests {
         .run()
         .unwrap();
         assert_eq!(stack.borrow().deref(), &[StackValue::Integer(123)]);
+    }
+
+    #[test]
+    fn test_empty_input() {
+        let program = simple_program![
+            Command::ReadChar,
+            Command::WriteInt,
+            Command::ReadChar,
+            Command::WriteInt,
+            Command::ReadChar,
+            Command::WriteInt,
+        ];
+        let stack = Rc::<RefCell<_>>::default();
+        let mut output = Vec::<u8>::new();
+        Interpreter {
+            input: &b"x"[..],
+            output: &mut output,
+            program,
+            config: Config {
+                type_safety: TypeSafety::None,
+                ..Default::default()
+            },
+            stack,
+        }
+        .run()
+        .unwrap();
+        assert_eq!(output, format!("{}-1-1", b'x').as_bytes());
     }
 }
