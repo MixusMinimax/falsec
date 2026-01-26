@@ -23,10 +23,13 @@ jobs:
       - name: Stage release files
         run: |
           mkdir -p dist/bin
-          mkdir -p dist/completions
+          mkdir -p dist/completion
 
           cp target/release/falsec dist/bin/
-          cp completions/* dist/completions/
+          cp completion/falsec.bash dist/completion/
+          cp completion/falsec.elv dist/completion/
+          cp completion/falsec.fish dist/completion/
+          cp completion/falsec.zsh dist/completion/
           cp LICENSE dist/
 
       - name: Derive version
