@@ -18,6 +18,12 @@ jobs:
       - name: Build binary
         run: cargo build --release
 
+      - name: Derive version
+        run: |
+          VERSION="${{ github.ref_name }}"
+          VERSION="${VERSION#v}"
+          echo "VERSION=$VERSION" >> $GITHUB_ENV
+
       - name: Stage release files
         run: |
           mkdir -p falsec-bin-${{ env.VERSION }}/bin
@@ -29,12 +35,6 @@ jobs:
           cp completion/falsec.fish falsec-bin-${{ env.VERSION }}/completion/
           cp completion/falsec.zsh falsec-bin-${{ env.VERSION }}/completion/
           cp LICENSE falsec-bin-${{ env.VERSION }}/
-
-      - name: Derive version
-        run: |
-          VERSION="${{ github.ref_name }}"
-          VERSION="${VERSION#v}"
-          echo "VERSION=$VERSION" >> $GITHUB_ENV
 
       - name: Create tarball
         run: |
