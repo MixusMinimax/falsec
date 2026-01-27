@@ -4,7 +4,7 @@ version = "0.1.0"
 edition = "2024"
 
 [dev-dependencies]
-falsec-analyzer = { version = "0.1.1", path = "../falsec-analyzer" }
+falsec-analyzer = { version = "0.1.2", path = "../falsec-analyzer" }
 falsec-interpreter = { version = "0.1.3", path = "../falsec-interpreter" }
 falsec-parser = { version = "0.1.2", path = "../falsec-parser" }
 falsec-types = { version = "0.1.1", path = "../falsec-types" }
