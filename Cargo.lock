@@ -192,6 +192,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "falsec-test"
+version = "0.1.0"
+dependencies = [
+ "falsec-analyzer",
+ "falsec-interpreter",
+ "falsec-parser",
+ "falsec-types",
+]
+
+[[package]]
 name = "falsec-types"
 version = "0.1.1"
 dependencies = [

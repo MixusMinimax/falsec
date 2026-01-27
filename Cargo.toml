@@ -1,3 +1,12 @@
 [workspace]
 resolver = "2"
-members = ["falsec-analyzer", "falsec-cli", "falsec-compiler", "falsec-interpreter", "falsec-parser", "falsec-types", "falsec-util"]
+members = [
+    "falsec-analyzer",
+    "falsec-cli",
+    "falsec-compiler",
+    "falsec-interpreter",
+    "falsec-parser", "falsec-test",
+    "falsec-types",
+    "falsec-util",
+    "falsec-test"
+]
