@@ -263,7 +263,8 @@ impl<Input: Read, Output: Write> Interpreter<'_, Input, Output> {
                 state.ret_lambda()?;
                 continue;
             }
-            let (instruction, _) = state.get_current_instruction()?;
+            let (instruction, pos) = state.get_current_instruction()?;
+            state.current_pos = pos.start;
             state.program_counter += 1;
             match instruction {
                 Command::IntLiteral(i) => state.pushi(*i as i64),
