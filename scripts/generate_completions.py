@@ -21,6 +21,6 @@ if __name__ == '__main__':
     for (shell, p) in shells:
         subprocess.run([
             'cargo', 'run', '-q', '--release', '--no-default-features', '--features=completions', '--package',
-            'falsec-cli', '--bin', 'print-completions', '--',
+            'falsec-cli', '--bin', 'falsec-print-completions', '--',
             f'--generator={shell}', str(completion_folder / p)
         ], check=True)

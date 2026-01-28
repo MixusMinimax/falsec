@@ -1,7 +1,8 @@
 [package]
 name = "falsec"
-version = "0.1.5"
+version = "0.1.6"
 default-run = "falsec"
+autobins = false
 edition.workspace = true
 rust-version.workspace = true
 authors = ["Maxi <maxi.barmetler@gmail.com>"]
@@ -25,7 +26,7 @@ path = "src/main.rs"
 required-features = ["runtime"]
 
 [[bin]]
-name = "print-completions"
+name = "falsec-print-completions"
 path = "src/bin/print_completions.rs"
 required-features = ["completions"]
 
