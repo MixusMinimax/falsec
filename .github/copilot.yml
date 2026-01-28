@@ -1,0 +1,5 @@
+# GitHub Copilot Configuration
+# Disable Copilot Agents for this repository
+
+agents:
+  enabled: false
