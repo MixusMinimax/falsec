@@ -1,8 +1,19 @@
 [package]
 name = "falsec-cli"
 version = "0.1.5"
-edition = "2024"
 default-run = "falsec"
+edition.workspace = true
+rust-version.workspace = true
+authors = ["Maxi <maxi.barmetler@gmail.com>"]
+readme = "../README.md"
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = """
+An interpreter and compiler for the esotheric programming language FALSE.
+"""
+categories = ["compilers", "command-line-utilities"]
+keywords = ["false"]
 
 [lib]
 name = "falsec_cli"

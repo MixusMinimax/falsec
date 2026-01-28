@@ -1,6 +1,13 @@
 [package]
 name = "falsec-util"
 version = "0.1.1"
-edition = "2024"
+edition.workspace = true
+rust-version.workspace = true
+authors = ["Maxi <maxi.barmetler@gmail.com>"]
+readme = "../README.md"
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "core utilities for falsec."
 
 [dependencies]

@@ -10,3 +10,10 @@ members = [
     "falsec-util",
     "falsec-test"
 ]
+
+[workspace.package]
+repository = "https://github.com/MixusMinimax/falsec"
+homepage = "https://github.com/MixusMinimax/falsec"
+license = "MIT"
+rust-version = "1.85.0"
+edition = "2024"
