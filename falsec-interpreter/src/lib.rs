@@ -1,10 +1,11 @@
 mod error;
 
-use crate::error::InterpreterError;
+use crate::error::{InterpreterError, ProgramPos};
 use falsec_types::source::{Command, Lambda, LambdaCommand, Pos, Program, Span};
 use falsec_types::{Config, TypeSafety};
 use std::collections::HashMap;
 use std::io::{ErrorKind, Read, Write};
+use std::iter::once;
 #[cfg(test)]
 use std::{cell::RefCell, rc::Rc};
 
@@ -53,8 +54,9 @@ enum StackValue {
 
 impl<Input: Read, Output: Write> Interpreter<'_, Input, Output> {
     pub fn run(mut self) -> Result<(), InterpreterError> {
-        struct State<'source> {
+        struct State<'i, 'source> {
             program: &'source Program<'source>,
+            config: &'i Config,
             call_stack: Vec<StackFrame>,
             data_stack: Vec<StackValue>,
             variables: HashMap<char, StackValue>,
@@ -67,27 +69,38 @@ impl<Input: Read, Output: Write> Interpreter<'_, Input, Output> {
 
         fn get_lambda<'source>(
             program: &'source Program<'source>,
-            current_lambda_id: u64,
-            current_pos: Pos,
+            id: u64,
+            backtrace: impl Fn() -> Vec<ProgramPos>,
         ) -> Result<&'source Lambda<'source>, InterpreterError> {
-            program.lambdas.get(&current_lambda_id).ok_or_else(|| {
-                InterpreterError::invalid_lambda_reference(current_pos, current_lambda_id, 0)
-            })
+            program
+                .lambdas
+                .get(&id)
+                .ok_or_else(|| InterpreterError::invalid_lambda_reference(backtrace(), id))
         }
 
-        let mut state = State {
-            program: &self.program,
-            call_stack: Vec::new(),
-            data_stack: Vec::new(),
-            variables: HashMap::new(),
-            current_lambda_id: self.program.main_id,
-            program_counter: 0,
-            current_pos: Pos::at_start(),
-            current_lambda: get_lambda(&self.program, self.program.main_id, Pos::at_start())?,
-            loop_state: LoopState::None,
-        };
+        impl<'source> State<'_, 'source> {
+            fn backtrace(&self) -> Vec<ProgramPos> {
+                let pos = ProgramPos {
+                    pos: self.current_pos,
+                    lambda_id: self.current_lambda_id,
+                    program_counter: self.program_counter,
+                };
+                if self.config.print_backtrace {
+                    once(pos)
+                        .chain(self.call_stack.iter().rev().map(|sf| {
+                            let lambda = get_lambda(self.program, sf.lambda_id, Vec::new).unwrap();
+                            ProgramPos {
+                                pos: lambda[sf.program_counter - 1].1.start,
+                                program_counter: sf.program_counter - 1,
+                                lambda_id: sf.lambda_id,
+                            }
+                        }))
+                        .collect()
+                } else {
+                    vec![pos]
+                }
+            }
 
-        impl<'source> State<'source> {
             fn get_current_instruction(
                 &self,
             ) -> Result<&'source (Command<'source>, Span<'source>), InterpreterError> {
@@ -95,8 +108,7 @@ impl<Input: Read, Output: Write> Interpreter<'_, Input, Output> {
                     .get(self.program_counter)
                     .ok_or_else(|| {
                         InterpreterError::invalid_program_counter(
-                            self.current_pos,
-                            self.current_lambda_id,
+                            self.backtrace(),
                             self.program_counter,
                         )
                     })
@@ -111,24 +123,21 @@ impl<Input: Read, Output: Write> Interpreter<'_, Input, Output> {
                 self.current_lambda_id = id;
                 self.program_counter = 0;
                 self.current_pos = Pos::at_start();
-                self.current_lambda = get_lambda(self.program, id, self.current_pos)?;
+                self.current_lambda = get_lambda(self.program, id, || self.backtrace())?;
                 self.loop_state = LoopState::None;
                 Ok(())
             }
 
             fn ret_lambda(&mut self) -> Result<(), InterpreterError> {
                 let frame = self.call_stack.pop().ok_or_else(|| {
-                    InterpreterError::tried_to_pop_from_empty_call_stack(
-                        self.current_pos,
-                        self.current_lambda_id,
-                        self.program_counter,
-                    )
+                    InterpreterError::tried_to_pop_from_empty_call_stack(self.backtrace())
                 })?;
                 self.current_lambda_id = frame.lambda_id;
                 self.program_counter = frame.program_counter;
                 self.loop_state = frame.loop_state;
                 self.current_pos = Pos::at_start();
-                self.current_lambda = get_lambda(self.program, frame.lambda_id, self.current_pos)?;
+                self.current_lambda =
+                    get_lambda(self.program, frame.lambda_id, || self.backtrace())?;
                 Ok(())
             }
 
@@ -138,21 +147,13 @@ impl<Input: Read, Output: Write> Interpreter<'_, Input, Output> {
 
             fn peek(&self) -> Result<StackValue, InterpreterError> {
                 self.data_stack.last().copied().ok_or_else(|| {
-                    InterpreterError::tried_to_pop_from_empty_data_stack(
-                        self.current_pos,
-                        self.current_lambda_id,
-                        self.program_counter,
-                    )
+                    InterpreterError::tried_to_pop_from_empty_data_stack(self.backtrace())
                 })
             }
 
             fn pop(&mut self) -> Result<StackValue, InterpreterError> {
                 self.data_stack.pop().ok_or_else(|| {
-                    InterpreterError::tried_to_pop_from_empty_data_stack(
-                        self.current_pos,
-                        self.current_lambda_id,
-                        self.program_counter,
-                    )
+                    InterpreterError::tried_to_pop_from_empty_data_stack(self.backtrace())
                 })
             }
 
@@ -173,19 +174,15 @@ impl<Input: Read, Output: Write> Interpreter<'_, Input, Output> {
                 match (self, config.type_safety) {
                     (Integer(i), _) => Ok(i),
                     (Var(_), TypeSafety::Full) => Err(InterpreterError::type_cast_error(
+                        state.backtrace(),
                         "Integer",
                         "Var",
-                        state.current_pos,
-                        state.current_lambda_id,
-                        state.program_counter,
                     )),
                     (Var(c), _) => Ok((c as u8 - b'a') as i64),
                     (Lambda(_), TypeSafety::Full) => Err(InterpreterError::type_cast_error(
+                        state.backtrace(),
                         "Integer",
                         "Lambda",
-                        state.current_pos,
-                        state.current_lambda_id,
-                        state.program_counter,
                     )),
                     (Lambda(id), _) => Ok(id as i64),
                 }
@@ -194,26 +191,14 @@ impl<Input: Read, Output: Write> Interpreter<'_, Input, Output> {
             fn into_var(self, config: &Config, state: &State) -> Result<char, InterpreterError> {
                 use StackValue::*;
                 match (self, config.type_safety) {
-                    (Integer(_), TypeSafety::Full | TypeSafety::LambdaAndVar) => {
-                        Err(InterpreterError::type_cast_error(
-                            "Integer",
-                            "Var",
-                            state.current_pos,
-                            state.current_lambda_id,
-                            state.program_counter,
-                        ))
-                    }
+                    (Integer(_), TypeSafety::Full | TypeSafety::LambdaAndVar) => Err(
+                        InterpreterError::type_cast_error(state.backtrace(), "Integer", "Var"),
+                    ),
                     (Integer(i), _) => Ok(((i as u8 & 31) + b'a') as char),
                     (Var(c), _) => Ok(c),
-                    (Lambda(_), TypeSafety::Full | TypeSafety::LambdaAndVar) => {
-                        Err(InterpreterError::type_cast_error(
-                            "Lambda",
-                            "Var",
-                            state.current_pos,
-                            state.current_lambda_id,
-                            state.program_counter,
-                        ))
-                    }
+                    (Lambda(_), TypeSafety::Full | TypeSafety::LambdaAndVar) => Err(
+                        InterpreterError::type_cast_error(state.backtrace(), "Lambda", "Var"),
+                    ),
                     (Lambda(id), _) => Ok(((id as u8 & 31) + b'a') as char),
                 }
             }
@@ -225,20 +210,16 @@ impl<Input: Read, Output: Write> Interpreter<'_, Input, Output> {
                         Integer(_),
                         TypeSafety::Full | TypeSafety::LambdaAndVar | TypeSafety::Lambda,
                     ) => Err(InterpreterError::type_cast_error(
+                        state.backtrace(),
                         "Integer",
                         "Lambda",
-                        state.current_pos,
-                        state.current_lambda_id,
-                        state.program_counter,
                     )),
                     (Integer(i), _) => Ok(i as u64),
                     (Var(_), TypeSafety::Full | TypeSafety::LambdaAndVar | TypeSafety::Lambda) => {
                         Err(InterpreterError::type_cast_error(
+                            state.backtrace(),
                             "Var",
                             "Lambda",
-                            state.current_pos,
-                            state.current_lambda_id,
-                            state.program_counter,
                         ))
                     }
                     (Var(c), _) => Ok(c as u64),
@@ -246,6 +227,19 @@ impl<Input: Read, Output: Write> Interpreter<'_, Input, Output> {
                 }
             }
         }
+
+        let mut state = State {
+            program: &self.program,
+            config: &self.config,
+            call_stack: Vec::new(),
+            data_stack: Vec::new(),
+            variables: HashMap::new(),
+            current_lambda_id: self.program.main_id,
+            program_counter: 0,
+            current_pos: Pos::at_start(),
+            current_lambda: get_lambda(&self.program, self.program.main_id, Vec::new)?,
+            loop_state: LoopState::None,
+        };
 
         #[cfg(test)]
         {
@@ -289,11 +283,9 @@ impl<Input: Read, Output: Write> Interpreter<'_, Input, Output> {
                     let index = state.pop()?.into_integer(&self.config, &state)?;
                     if index < 0 || index as usize >= state.data_stack.len() {
                         return Err(InterpreterError::index_out_of_bounds(
+                            state.backtrace(),
                             index,
                             state.data_stack.len(),
-                            state.current_pos,
-                            state.current_lambda_id,
-                            state.program_counter,
                         ));
                     }
                     state.push(state.data_stack[state.data_stack.len() - index as usize - 1]);
@@ -351,7 +343,7 @@ impl<Input: Read, Output: Write> Interpreter<'_, Input, Output> {
                 }
                 Command::Lambda(LambdaCommand::LambdaDefinition(..)) => {
                     return Err(InterpreterError::lambda_definition_not_allowed(
-                        state.current_pos,
+                        state.backtrace(),
                     ));
                 }
                 Command::Exec => {
@@ -414,56 +406,30 @@ impl<Input: Read, Output: Write> Interpreter<'_, Input, Output> {
                             state.pushi(-1);
                         }
                         Err(e) => {
-                            return Err(InterpreterError::io_error(
-                                e,
-                                state.current_pos,
-                                state.current_lambda_id,
-                                state.program_counter,
-                            ));
+                            return Err(InterpreterError::io_error(state.backtrace(), e));
                         }
                     };
                 }
                 Command::WriteChar => {
                     let c = state.pop()?.into_integer(&self.config, &state)?;
-                    self.output.write_all(&[c as u8]).map_err(|e| {
-                        InterpreterError::io_error(
-                            e,
-                            state.current_pos,
-                            state.current_lambda_id,
-                            state.program_counter,
-                        )
-                    })?;
+                    self.output
+                        .write_all(&[c as u8])
+                        .map_err(|e| InterpreterError::io_error(state.backtrace(), e))?;
                 }
                 Command::StringLiteral(s) => {
-                    self.output.write_all(s.as_bytes()).map_err(|e| {
-                        InterpreterError::io_error(
-                            e,
-                            state.current_pos,
-                            state.current_lambda_id,
-                            state.program_counter,
-                        )
-                    })?;
+                    self.output
+                        .write_all(s.as_bytes())
+                        .map_err(|e| InterpreterError::io_error(state.backtrace(), e))?;
                 }
                 Command::WriteInt => {
                     let i = state.pop()?.into_integer(&self.config, &state)?;
-                    write!(self.output, "{}", i).map_err(|e| {
-                        InterpreterError::io_error(
-                            e,
-                            state.current_pos,
-                            state.current_lambda_id,
-                            state.program_counter,
-                        )
-                    })?;
+                    write!(self.output, "{}", i)
+                        .map_err(|e| InterpreterError::io_error(state.backtrace(), e))?;
                 }
                 Command::Flush => {
-                    self.output.flush().map_err(|e| {
-                        InterpreterError::io_error(
-                            e,
-                            state.current_pos,
-                            state.current_lambda_id,
-                            state.program_counter,
-                        )
-                    })?;
+                    self.output
+                        .flush()
+                        .map_err(|e| InterpreterError::io_error(state.backtrace(), e))?;
                 }
                 Command::Comment(_) => {}
             }

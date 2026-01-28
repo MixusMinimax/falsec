@@ -15,5 +15,5 @@ members = [
 repository = "https://github.com/MixusMinimax/falsec"
 homepage = "https://github.com/MixusMinimax/falsec"
 license = "MIT"
-rust-version = "1.85.0"
+rust-version = "1.87.0"
 edition = "2024"

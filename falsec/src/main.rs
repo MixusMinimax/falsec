@@ -5,10 +5,10 @@ use falsec_types::Config;
 use falsec_types::source::Program;
 use std::borrow::Cow;
 use std::cell::OnceCell;
-use std::ffi::{OsStr, OsString};
+use std::ffi::OsStr;
 use std::fs::File;
 use std::io::{Read, Write, stdin, stdout};
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 trait FromArg<T> {
     fn from_arg(t: T) -> Self;
@@ -52,17 +52,27 @@ fn main() {
 
     match cli.command {
         Commands::Run(Run {
-            program,
+            program: program_path,
             type_safety,
+            print_backtrace,
         }) => {
             if let Some(type_safety) = type_safety {
                 config.type_safety = FromArg::from_arg(type_safety);
             }
-            let source_code = read_program(program);
+            config.print_backtrace |= print_backtrace;
+            let print_backtrace = config.print_backtrace;
+            let source_code = read_program(Path::new(&program_path));
             let program = parse_program(&source_code, &config);
             let interpreter =
                 falsec_interpreter::Interpreter::new(stdin(), stdout(), program, config);
-            interpreter.run().unwrap();
+            let res = interpreter.run();
+            stdout().flush().unwrap();
+            if let Err(e) = res {
+                println!("\n{e}");
+                if print_backtrace {
+                    println!("{}", e.fmt_backtrace(program_path.to_str().unwrap()));
+                }
+            }
         }
         Commands::Compile(Compile {
             program,
@@ -75,7 +85,7 @@ fn main() {
             }
             let out_path =
                 out.unwrap_or_else(|| PathBuf::from(&program).with_extension("").into_os_string());
-            let source_code = read_program(program);
+            let source_code = read_program(Path::new(&program));
             let program = parse_program(&source_code, &config);
             #[derive(Debug, Default)]
             struct LazyFile<'a>(Cow<'a, OsStr>, OnceCell<File>);
@@ -111,7 +121,7 @@ fn main() {
     }
 }
 
-fn read_program(program: OsString) -> String {
+fn read_program(program: &Path) -> String {
     if program == "-" {
         let mut buffer = String::new();
         stdin().read_to_string(&mut buffer).unwrap();

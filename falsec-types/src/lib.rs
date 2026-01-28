@@ -35,6 +35,10 @@ pub struct Config {
     /// stack size in bytes
     #[cfg_attr(feature = "serde", serde(default))]
     pub stack_size: StackSize,
+
+    /// Print stack trace
+    #[cfg_attr(feature = "serde", serde(default))]
+    pub print_backtrace: bool,
 }
 
 #[derive(Copy, Clone, PartialOrd, Ord, PartialEq, Eq, Debug, Default)]

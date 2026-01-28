@@ -54,6 +54,10 @@ mod run {
         /// The path to the FALSE program to execute
         #[arg(value_name = "FILE", value_hint = ValueHint::FilePath)]
         pub program: OsString,
+
+        /// Print backtrace on error
+        #[arg(short = 'b', long)]
+        pub print_backtrace: bool,
     }
 }
 

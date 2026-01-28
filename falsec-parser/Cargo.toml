@@ -11,4 +11,4 @@ homepage.workspace = true
 description = "FALSE parser."
 
 [dependencies]
-falsec-types = { version = "0.1.1", path = "../falsec-types" }
+falsec-types = { version = "0.1.2", path = "../falsec-types" }

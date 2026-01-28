@@ -11,6 +11,6 @@ homepage.workspace = true
 description = "FALSE compiler."
 
 [dependencies]
-falsec-types = { version = "0.1.1", path = "../falsec-types" }
+falsec-types = { version = "0.1.2", path = "../falsec-types" }
 falsec-util = { version = "0.1.1", path = "../falsec-util" }
 tempfile = "3.15.0"

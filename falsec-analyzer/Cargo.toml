@@ -11,5 +11,5 @@ homepage.workspace = true
 description = "code analyzer for falsec (WIP)."
 
 [dependencies]
-falsec-types = { version = "0.1.1", path = "../falsec-types" }
+falsec-types = { version = "0.1.2", path = "../falsec-types" }
 falsec-util = { version = "0.1.1", path = "../falsec-util" }

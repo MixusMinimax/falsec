@@ -3,11 +3,16 @@ use std::error::Error;
 use std::fmt;
 use std::rc::Rc;
 
+#[derive(Copy, Clone, Eq, PartialEq, Debug, Default)]
+pub struct ProgramPos {
+    pub pos: Pos,
+    pub program_counter: usize,
+    pub lambda_id: u64,
+}
+
 #[derive(Clone, Debug)]
 pub struct InterpreterError {
-    pub pos: Pos,
-    pub current_lambda_id: u64,
-    pub program_counter: usize,
+    pub backtrace: Vec<ProgramPos>,
     pub kind: InterpreterErrorKind,
 }
 
@@ -30,7 +35,39 @@ impl Error for InterpreterError {}
 
 impl fmt::Display for InterpreterError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "Interpreter Error: {}", self.kind)
+        let pos = self.backtrace[0].pos;
+        write!(
+            f,
+            "Interpreter Error at {}:{}: {}",
+            pos.line, pos.column, self.kind
+        )
+    }
+}
+
+impl InterpreterError {
+    pub fn fmt_backtrace(&self, path: &str) -> impl fmt::Display {
+        struct BT<'s, 'i>(&'s InterpreterError, &'i str);
+
+        impl fmt::Display for BT<'_, '_> {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                macro_rules! write_pos {
+                    ($p:expr) => {{
+                        let p = $p;
+                        write!(f, "{}:{}:{}", self.1, p.line, p.column)
+                    }};
+                }
+                write!(f, "  raised at   ")?;
+                write_pos!(self.0.backtrace[0].pos)?;
+                for sf in self.0.backtrace.iter().skip(1) {
+                    writeln!(f)?;
+                    write!(f, "  called from ")?;
+                    write_pos!(sf.pos)?;
+                }
+                Ok(())
+            }
+        }
+
+        BT(self, path)
     }
 }
 
@@ -53,99 +90,62 @@ impl fmt::Display for InterpreterErrorKind {
 }
 
 impl InterpreterError {
-    pub fn invalid_lambda_reference(pos: Pos, current_lambda_id: u64, id: u64) -> Self {
+    pub fn invalid_lambda_reference(backtrace: Vec<ProgramPos>, id: u64) -> Self {
         Self {
-            pos,
-            current_lambda_id,
-            program_counter: 0,
+            backtrace,
             kind: InterpreterErrorKind::InvalidLambdaReference(id),
         }
     }
 
-    pub fn invalid_program_counter(pos: Pos, current_lambda_id: u64, pc: usize) -> Self {
+    pub fn invalid_program_counter(backtrace: Vec<ProgramPos>, pc: usize) -> Self {
         Self {
-            pos,
-            current_lambda_id,
-            program_counter: pc,
+            backtrace,
             kind: InterpreterErrorKind::InvalidProgramCounter(pc),
         }
     }
 
-    pub fn lambda_definition_not_allowed(pos: Pos) -> Self {
+    pub fn lambda_definition_not_allowed(backtrace: Vec<ProgramPos>) -> Self {
         Self {
-            pos,
-            current_lambda_id: 0,
-            program_counter: 0,
+            backtrace,
             kind: InterpreterErrorKind::LambdaDefinitionNotAllowed,
         }
     }
 
-    pub fn tried_to_pop_from_empty_call_stack(
-        pos: Pos,
-        current_lambda_id: u64,
-        program_counter: usize,
-    ) -> Self {
+    pub fn tried_to_pop_from_empty_call_stack(backtrace: Vec<ProgramPos>) -> Self {
         Self {
-            pos,
-            current_lambda_id,
-            program_counter,
+            backtrace,
             kind: InterpreterErrorKind::TriedToPopFromEmptyCallStack,
         }
     }
 
-    pub fn tried_to_pop_from_empty_data_stack(
-        pos: Pos,
-        current_lambda_id: u64,
-        program_counter: usize,
-    ) -> Self {
+    pub fn tried_to_pop_from_empty_data_stack(backtrace: Vec<ProgramPos>) -> Self {
         Self {
-            pos,
-            current_lambda_id,
-            program_counter,
+            backtrace,
             kind: InterpreterErrorKind::TriedToPopFromEmptyDataStack,
         }
     }
 
     pub fn type_cast_error(
+        backtrace: Vec<ProgramPos>,
         from: &'static str,
         to: &'static str,
-        pos: Pos,
-        current_lambda_id: u64,
-        program_counter: usize,
     ) -> Self {
         Self {
-            pos,
-            current_lambda_id,
-            program_counter,
+            backtrace,
             kind: InterpreterErrorKind::TypeCastError { from, to },
         }
     }
 
-    pub fn index_out_of_bounds(
-        index: i64,
-        len: usize,
-        pos: Pos,
-        current_lambda_id: u64,
-        program_counter: usize,
-    ) -> Self {
+    pub fn index_out_of_bounds(backtrace: Vec<ProgramPos>, index: i64, len: usize) -> Self {
         Self {
-            pos,
-            current_lambda_id,
-            program_counter,
+            backtrace,
             kind: InterpreterErrorKind::IndexOutOfBounds(index, len),
         }
     }
 
-    pub fn io_error(
-        err: std::io::Error,
-        pos: Pos,
-        current_lambda_id: u64,
-        program_counter: usize,
-    ) -> Self {
+    pub fn io_error(backtrace: Vec<ProgramPos>, err: std::io::Error) -> Self {
         Self {
-            pos,
-            current_lambda_id,
-            program_counter,
+            backtrace,
             kind: InterpreterErrorKind::IO(Rc::new(err)),
         }
     }
