@@ -1,5 +1,5 @@
 [package]
-name = "falsec-cli"
+name = "falsec"
 version = "0.1.5"
 default-run = "falsec"
 edition.workspace = true

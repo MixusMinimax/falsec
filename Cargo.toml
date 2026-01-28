@@ -1,14 +1,14 @@
 [workspace]
 resolver = "2"
 members = [
+    "falsec",
     "falsec-analyzer",
-    "falsec-cli",
     "falsec-compiler",
     "falsec-interpreter",
     "falsec-parser", "falsec-test",
+    "falsec-test",
     "falsec-types",
-    "falsec-util",
-    "falsec-test"
+    "falsec-util"
 ]
 
 [workspace.package]

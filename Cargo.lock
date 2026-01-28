@@ -142,15 +142,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "falsec-analyzer"
-version = "0.1.2"
-dependencies = [
- "falsec-types",
- "falsec-util",
-]
-
-[[package]]
-name = "falsec-cli"
+name = "falsec"
 version = "0.1.5"
 dependencies = [
  "anstyle",
@@ -166,6 +158,14 @@ dependencies = [
  "serde_json",
  "serde_yaml",
  "toml",
+]
+
+[[package]]
+name = "falsec-analyzer"
+version = "0.1.2"
+dependencies = [
+ "falsec-types",
+ "falsec-util",
 ]
 
 [[package]]
