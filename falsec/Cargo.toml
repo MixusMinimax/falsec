@@ -1,6 +1,6 @@
 [package]
 name = "falsec"
-version = "0.1.7"
+version = "0.1.8"
 default-run = "falsec"
 autobins = false
 edition.workspace = true

@@ -117,6 +117,15 @@ fn main() {
                     .map(|p| Box::new(LazyFile::new(p)) as _),
             })
             .unwrap();
+
+            #[cfg(unix)]
+            {
+                // chmod +x
+                use std::os::unix::fs::PermissionsExt;
+                let mut perms = std::fs::metadata(&out_path).unwrap().permissions();
+                perms.set_mode(perms.mode() | 0o111);
+                std::fs::set_permissions(&out_path, perms).unwrap();
+            }
         }
     }
 }
