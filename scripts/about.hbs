@@ -1,0 +1,21 @@
+falsec-bin
+Third-Party Licenses
+====================
+
+This distribution contains software from third-party Rust crates.
+{{#each licenses}}{{#unless (eq used_by.[0].crate.name "falsec")}}
+
+================================================================================
+{{name}}
+================================================================================
+
+Used by
+
+{{#each used_by}}
+- {{crate.name}} {{crate.version}}
+{{/each}}
+
+--------------------------------------------------------------------------------
+
+{{{text}}}
+{{/unless}}{{/each}}

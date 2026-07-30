@@ -1,0 +1,16 @@
+accepted = [
+    "Apache-2.0",
+    "MIT",
+    "Unicode-3.0",
+]
+private = { ignore = true }
+ignore-build-dependencies = true
+ignore-dev-dependencies = true
+
+falsec.accepted = []
+falsec-analyzer.accepted = []
+falsec-compiler.accepted = []
+falsec-interpreter.accepted = []
+falsec-parser.accepted = []
+falsec-types.accepted = []
+falsec-util.accepted = []

@@ -35,6 +35,7 @@ jobs:
           cp completion/falsec.fish falsec-bin-${{ env.VERSION }}/completion/
           cp completion/falsec.zsh falsec-bin-${{ env.VERSION }}/completion/
           cp LICENSE falsec-bin-${{ env.VERSION }}/
+          cp THIRD_PARTY_LICENSES falsec-bin-${{ env.VERSION }}/
 
       - name: Create tarball
         run: |
