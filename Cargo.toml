@@ -14,6 +14,8 @@ members = [
 [workspace.package]
 repository = "https://github.com/MixusMinimax/falsec"
 homepage = "https://github.com/MixusMinimax/falsec"
+authors = ["Maxi <maxi@barmetler.com>"]
+readme = "README.md"
 license = "MIT"
 rust-version = "1.87.0"
 edition = "2024"
