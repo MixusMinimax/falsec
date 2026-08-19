@@ -56,7 +56,7 @@ From https://esolangs.org/wiki/FALSE#Commands:
 123'c$%\@Ø+-*/_&|~>=[]!?#a:;^,"asd".ß{dsa}
 ```
 
-The ````` command is not implemented, as that was used for 68000 machine instructions. If I implemented it, it could work in the compiler, but I'm not sure how to make it work in the interpreter. It's just a bandaid fix for missing language features anyway (syscalls, etc), which I'd rather implement with more language features instead, or just internal lambdas (for example `1_!` could call a builtin function that does something specific, like a syscall).
+The `` ` `` command is not implemented, as that was used for 68000 machine instructions. If I implemented it, it could work in the compiler, but I'm not sure how to make it work in the interpreter. It's just a bandaid fix for missing language features anyway (syscalls, etc), which I'd rather implement with more language features instead, or just internal lambdas (for example `1_!` could call a builtin function that does something specific, like a syscall).
 
 ## Notes
 
