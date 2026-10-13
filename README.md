@@ -19,7 +19,7 @@ paru -S falsec-bin
 Or just run it from source:
 
 ```sh
-cargo run -- --version
+cargo run -- run examples/simple.f
 ```
 
 ## Configuration
